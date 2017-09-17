@@ -1,0 +1,3 @@
+"0","all.assignments$agreement <- ifelse(rowMeans(all.assignments[,1:7]) %% 1 > 0.0, FALSE, TRUE)"
+"0","all.assignments$mode <- apply(all.assignments[,1:7], 1, "
+"0","                                   function(idx) { which(tabulate(idx) == max(tabulate(idx)))})"

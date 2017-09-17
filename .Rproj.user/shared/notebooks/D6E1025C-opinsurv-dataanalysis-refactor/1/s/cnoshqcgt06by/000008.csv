@@ -1,0 +1,7 @@
+"0","measures_by_user_clust$Q11.Demo.HowOftenProduceVis <- "
+"0","  factor(measures_by_user_clust$Q11.Demo.HowOftenProduceVis,"
+"0","                    levels=freq5,"
+"0","                    ordered = TRUE)"
+"0","ggplot(measures_by_user_clust, aes(x=Q11.Demo.HowOftenProduceVis)) + "
+"0","  geom_bar() +"
+"0","  facet_grid(cluster ~ .)"

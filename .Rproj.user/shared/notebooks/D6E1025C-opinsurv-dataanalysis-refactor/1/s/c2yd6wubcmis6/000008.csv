@@ -1,0 +1,44 @@
+"0","new_names <- read_excel(""OpinionSurvey-new-names.xlsx"")"
+"0","#DF <- read_csv(""OpinionSurvey-rawdata.csv"", skip=2, col_names = new_names$NewName, locale = locale(encoding = ""Windows-1252""))"
+"0","DF <- read_csv(""OpinionSurvey-rawdata.csv"", skip=2, col_names = new_names$NewName)"
+"2","Parsed with column specification:
+cols(
+  .default = col_character(),
+  V3.StartDate = col_datetime(format = """"),
+  V4.EndDate = col_datetime(format = """"),
+  V5.Finished = col_integer(),
+  Q25.SurveyInfoPage = col_integer(),
+  Q14.1_1_1.Measures.Important.AvgDegreeUnfamiliar = col_integer(),
+  Q14.1_2_1.Measures.Important.NumLinksUnfamiliar = col_integer(),
+  Q14.1_3_1.Measures.Important.NumNodesUnfamiliar = col_integer(),
+  Q14.1_4_1.Measures.Important.NumComponentsUnfamiliar = col_integer(),
+  Q14.1_6_1.Measures.Important.AvgPathLengthUnfamiliar = col_integer(),
+  Q14.1_11_1.Measures.Important.NodeDegreeUnfamiliar = col_integer(),
+  Q16.1_1_1.Measures.Estimable.AvgDegreeUnfamiliar = col_integer(),
+  Q16.1_2_1.Measures.Estimable.NumLinksUnfamiliar = col_integer(),
+  Q16.1_3_1.Measures.Estimable.NumNodesUnfamiliar = col_integer(),
+  Q16.1_4_1.Measures.Estimable.NumComponentsUnfamiliar = col_integer(),
+  Q16.1_6_1.Measures.Estimable.AvgPathLengthUnfamiliar = col_integer(),
+  Q16.1_7_1.Measures.Estimable.AvgShortestPathUnfamiliar = col_integer(),
+  Q16.1_8_1.Measures.Estimable.DiameterUnfamiliar = col_integer(),
+  Q16.1_9_1.Measures.Estimable.DensityUnfamiliar = col_integer(),
+  Q16.1_10_1.Measures.Estimable.ClusteringCoeffUnfamiliar = col_integer(),
+  Q16.1_18_1.Measures.Estimable.OtherFromImportant = col_integer()
+  # ... with 4 more columns
+)
+"
+"2","See spec(...) for full column specifications.
+"
+"2","number of columns of result is not a multiple of vector length (arg 1)"
+"2","60 parsing failures.
+row # A tibble: 5 x 5 col     row   col    expected      actual                        file expected   <int> <chr>       <chr>       <chr>                       <chr> actual 1     1  <NA> 210 columns 211 columns 'OpinionSurvey-rawdata.csv' file 2     2  <NA> 210 columns 211 columns 'OpinionSurvey-rawdata.csv' row 3     3  <NA> 210 columns 211 columns 'OpinionSurvey-rawdata.csv' col 4     4  <NA> 210 columns 211 columns 'OpinionSurvey-rawdata.csv' expected 5     5  <NA> 210 columns 211 columns 'OpinionSurvey-rawdata.csv'
+... ................. ... ................................................................. ........ ................................................................. ...... ................................................................. .... ................................................................. ... ................................................................. ... ................................................................. ........ .................................................................
+See problems(...) for more details.
+"
+"0","#DF <- read.csv(""OpinionSurvey-rawdata.csv"", header=TRUE, stringsAsFactors=FALSE, fileEncoding = ""Windows-1252"")"
+"0","DF <- DF %>% dplyr::select(-c(V2.ResponseSet, Q25.SurveyInfoPage))"
+"0","# creating meaningful subsets of columns"
+"0","non_demo_vars <- c(12:125,127:202)"
+"0","free_text_vars <- c(203:205)"
+"0","# create a subset for analysis including everything but free text variables  "
+"0","DF_filter <- dplyr::select(DF, -free_text_vars)"

@@ -1,0 +1,3 @@
+"0","# Separate the answers that involve selecting ""Other"" and then filling in a text field"
+"0","DF_split_other <- filter(DF_split, name %in% c(""Other"",""OtherTEXT"",""OtherFromImportant""))"
+"0","DF_split_rest <- filter(DF_split, !(name %in% c(""Other"",""OtherTEXT"",""OtherFromImportant"")))"

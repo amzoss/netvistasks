@@ -1,0 +1,2 @@
+"0","multi_panel_pcplot <- arrangeGrob(modelpc1plot, modelpc2plot, ncol=2)"
+"0","ggsave(""multi_panel_pcplot.png"", multi_panel_pcplot, width = 12, height = 5)"

@@ -1,0 +1,7 @@
+"0","#setwd(""/Users/az49/Box Sync/PhD-AngelaZoss/1-Opinion Survey/data/OpinSurv-DataAnalysis"")"
+"0","require(FactoMineR)"
+"0","require(missMDA)"
+"0","require(tidyverse)"
+"0","require(gridExtra)"
+"0","require(grid)"
+"0","#require(data.table)"

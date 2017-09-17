@@ -1,0 +1,933 @@
+---
+title: "Statistics-PCA"
+author: "Angela Zoss"
+date: "July 23, 2016"
+output: 
+  html_document:
+    toc: true
+    toc_float: true
+    number_sections: true
+    fig_width: 10
+    code_folding: show
+    keep_md: true
+---
+# Multiple Factor Analysis
+
+## Setting up the environment.
+
+```{r, message=FALSE}
+#setwd("/Users/az49/Box Sync/PhD-AngelaZoss/1-Opinion Survey/data/OpinSurv-DataAnalysis")
+
+require(FactoMineR)
+require(missMDA)
+require(tidyverse)
+require(gridExtra)
+require(grid)
+#require(data.table)
+```
+
+## First try: load data in string version and factor it. Could try to run the MFA directly.  Works okay, but doesn't deal with skipped responses, which requires missMDA and a different data format.
+
+```{r}
+
+#pca_table.csv already reduced to 51 observations
+DF.PCA <- read.csv("pca_table.csv", header=TRUE, stringsAsFactors=FALSE, row.names=1)
+
+DF.PCA$Q15.Demo.HighestDegree <- sub("’","", DF.PCA$Q15.Demo.HighestDegree)
+
+DF.PCA$Q5.Demo.PrimaryAcademicField <- sub("-99","Skipped", DF.PCA$Q5.Demo.PrimaryAcademicField)
+
+DF.PCA$Q5.Demo.PrimaryAcademicField <- factor(DF.PCA$Q5.Demo.PrimaryAcademicField)
+
+DF.PCA$Q15.Demo.HighestDegree <- factor(DF.PCA$Q15.Demo.HighestDegree, 
+                                    levels=c("Bachelors degree",
+                                             "Masters degree",
+                                             "Professional degree", 
+                                             "Doctorate degree", 
+                                             "Other"),
+                                    labels=c("Bachelor's",
+                                             "Master's",
+                                             "Professional",
+                                             "Doctoral",
+                                             "Other"),
+                                    ordered = TRUE)
+
+freq4 <- c("None","A little", "Some", "A lot")
+
+DF.PCA$Q1.Demo.NetworkConsumerExperience <-
+  factor(DF.PCA$Q1.Demo.NetworkConsumerExperience, 
+         levels=freq4,
+         ordered = TRUE)
+
+DF.PCA$Q21.Demo.NetworkProducerExperience <-
+  factor(DF.PCA$Q21.Demo.NetworkProducerExperience, 
+         levels=freq4,
+         ordered = TRUE)
+
+agree4 <- c("Not well at all","Not very well", "Somewhat well", "Very well")
+
+DF.PCA$Q3.Demo.NetworkAnalysisResearch <-
+  factor(DF.PCA$Q3.Demo.NetworkAnalysisResearch, 
+         levels=agree4,
+         labels=c("Not well\nat all","Not very\nwell", "Somewhat\nwell", "Very well"),
+         ordered = TRUE)
+
+DF.PCA$Q4.Demo.NetworkVisualizationResearch <-
+  factor(DF.PCA$Q4.Demo.NetworkVisualizationResearch, 
+         levels=agree4,
+         labels=c("Not well\nat all","Not very\nwell", "Somewhat\nwell", "Very well"),
+         ordered = TRUE)
+
+freq5 <- c("Skipped","Never","Rarely", "Sometimes", "Most of the time", "Always")
+
+DF.PCA$Q11.Demo.HowOftenProduceVis <- 
+  factor(DF.PCA$Q11.Demo.HowOftenProduceVis,
+                    levels=freq5,
+                    ordered = TRUE)
+
+for (col in c(8:43)){
+  DF.PCA[,col] <- factor(DF.PCA[,col],levels=c("Skipped","Unfamiliar","Never/almost never","Seldom/rarely","Often","Almost always/always"),ordered=TRUE)
+}
+
+for (col in c(44:77)){
+  DF.PCA[,col] <- factor(DF.PCA[,col],levels=c("Skipped","Unfamiliar","Very low","Somewhat low","Somewhat high","Very high"),ordered=TRUE)
+}
+
+for (col in c(78:93)){
+  DF.PCA[,col] <- factor(DF.PCA[,col],levels=c("Skipped","Unfamiliar","Never/almost never","Seldom/rarely","Often","Almost always/always"),ordered=TRUE)
+}
+
+
+
+```
+
+## Prepare data for imputing instead.  Load string versions of data, but then replace with numbers and refactor with new labels.
+
+```{r}
+#pca_table.csv already reduced to 51 observations
+DF.PCA.NA <- read.csv("pca_table.csv", header=TRUE, stringsAsFactors=FALSE, row.names=1)
+
+DF.PCA.NA$Q5.Demo.PrimaryAcademicField <-
+    ifelse(DF.PCA.NA$Q5.Demo.PrimaryAcademicField == "-99", NA, 
+           ifelse(DF.PCA.NA$Q5.Demo.PrimaryAcademicField == "Anthropology", 1, 
+                  ifelse(DF.PCA.NA$Q5.Demo.PrimaryAcademicField == "Business", 2, 
+                         ifelse(DF.PCA.NA$Q5.Demo.PrimaryAcademicField == "Communication studies", 3, 
+                                ifelse(DF.PCA.NA$Q5.Demo.PrimaryAcademicField == "Computer sciences", 4, 
+                                       ifelse(DF.PCA.NA$Q5.Demo.PrimaryAcademicField == "Economics", 5, 
+                                              ifelse(DF.PCA.NA$Q5.Demo.PrimaryAcademicField == "Engineering", 6, 
+                                                     ifelse(DF.PCA.NA$Q5.Demo.PrimaryAcademicField == "Geography", 7, 
+                                                            ifelse(DF.PCA.NA$Q5.Demo.PrimaryAcademicField == "History", 8, 
+                                                                   ifelse(DF.PCA.NA$Q5.Demo.PrimaryAcademicField == "Information science", 9, 
+                                                                          ifelse(DF.PCA.NA$Q5.Demo.PrimaryAcademicField == "Mathematics", 10, 
+                                                                                 ifelse(DF.PCA.NA$Q5.Demo.PrimaryAcademicField == "Medicine", 11, 
+                                                                                        ifelse(DF.PCA.NA$Q5.Demo.PrimaryAcademicField == "Other", 12, 
+                                                                                               ifelse(DF.PCA.NA$Q5.Demo.PrimaryAcademicField == "Physics", 13, 
+                                                                                                      ifelse(DF.PCA.NA$Q5.Demo.PrimaryAcademicField == "Political science", 14, 
+                                                                                                             ifelse(DF.PCA.NA$Q5.Demo.PrimaryAcademicField == "Psychology", 15, 
+                                                                                                                    ifelse(DF.PCA.NA$Q5.Demo.PrimaryAcademicField == "Public administration", 16, 
+                                                                                                                           ifelse(DF.PCA.NA$Q5.Demo.PrimaryAcademicField == "Sociology", 17, "Error"))))))))))))))))))
+  
+
+DF.PCA.NA$Q5.Demo.PrimaryAcademicField <- factor(DF.PCA.NA$Q5.Demo.PrimaryAcademicField,
+                                           levels=c(1:17),
+                                           labels=c("Anthropology", "Business", "Communication studies", "Computer sciences", "Economics", "Engineering", "Geography", "History", "Information science", "Mathematics", "Medicine", "Other", "Physics", "Political science", "Psychology", "Public administration", "Sociology"))
+
+DF.PCA.NA$Q15.Demo.HighestDegree <- sub("’","", DF.PCA.NA$Q15.Demo.HighestDegree)
+
+DF.PCA.NA$Q15.Demo.HighestDegree <- 
+    ifelse(DF.PCA.NA$Q15.Demo.HighestDegree == "Other", 5, 
+           ifelse(DF.PCA.NA$Q15.Demo.HighestDegree == "Skipped", NA, 
+                  ifelse(DF.PCA.NA$Q15.Demo.HighestDegree == "Bachelors degree", 1, 
+                         ifelse(DF.PCA.NA$Q15.Demo.HighestDegree == "Masters degree", 2, 
+                                ifelse(DF.PCA.NA$Q15.Demo.HighestDegree == "Professional degree", 3, 
+                                       ifelse(DF.PCA.NA$Q15.Demo.HighestDegree == "Doctorate degree", 4, "Error"))))))
+
+#DF.PCA.NA$Q15.Demo.HighestDegree <- factor(DF.PCA.NA$Q15.Demo.HighestDegree)
+
+DF.PCA.NA$Q15.Demo.HighestDegree <- factor(DF.PCA.NA$Q15.Demo.HighestDegree, 
+                                    levels=c(1, 2, 3, 4, 5),
+                                    labels=c("Bachelor's",
+                                             "Master's",
+                                             "Professional",
+                                             "Doctoral",
+                                             "Other"),
+                                    ordered = TRUE)
+
+DF.PCA.NA$Q1.Demo.NetworkConsumerExperience <-
+  ifelse(DF.PCA.NA$Q1.Demo.NetworkConsumerExperience == "Unfamiliar", 0, 
+           ifelse(DF.PCA.NA$Q1.Demo.NetworkConsumerExperience == "Skipped", NA, 
+                  ifelse(DF.PCA.NA$Q1.Demo.NetworkConsumerExperience == "None", 1, 
+                         ifelse(DF.PCA.NA$Q1.Demo.NetworkConsumerExperience == "A little", 2, 
+                                ifelse(DF.PCA.NA$Q1.Demo.NetworkConsumerExperience == "Some", 3, 
+                                       ifelse(DF.PCA.NA$Q1.Demo.NetworkConsumerExperience == "A lot", 4, "Error"))))))
+
+freq4 <- c("None","A little", "Some", "A lot")
+
+DF.PCA.NA$Q1.Demo.NetworkConsumerExperience <-
+  factor(DF.PCA.NA$Q1.Demo.NetworkConsumerExperience, 
+         levels=c(1,2,3,4),
+         labels=freq4,
+         ordered = TRUE)
+
+DF.PCA.NA$Q21.Demo.NetworkProducerExperience <-
+  ifelse(DF.PCA.NA$Q21.Demo.NetworkProducerExperience == "Unfamiliar", 0, 
+           ifelse(DF.PCA.NA$Q21.Demo.NetworkProducerExperience == "Skipped", NA, 
+                  ifelse(DF.PCA.NA$Q21.Demo.NetworkProducerExperience == "None", 1, 
+                         ifelse(DF.PCA.NA$Q21.Demo.NetworkProducerExperience == "A little", 2, 
+                                ifelse(DF.PCA.NA$Q21.Demo.NetworkProducerExperience == "Some", 3, 
+                                       ifelse(DF.PCA.NA$Q21.Demo.NetworkProducerExperience == "A lot", 4, "Error"))))))
+
+DF.PCA.NA$Q21.Demo.NetworkProducerExperience <-
+  factor(DF.PCA.NA$Q21.Demo.NetworkProducerExperience, 
+         levels=c(1,2,3,4),
+         labels=freq4,
+         ordered = TRUE)
+
+DF.PCA.NA$Q3.Demo.NetworkAnalysisResearch <-
+  ifelse(DF.PCA.NA$Q3.Demo.NetworkAnalysisResearch == "Unfamiliar", 0, 
+           ifelse(DF.PCA.NA$Q3.Demo.NetworkAnalysisResearch == "Skipped", NA, 
+                  ifelse(DF.PCA.NA$Q3.Demo.NetworkAnalysisResearch == "Not well at all", 1, 
+                         ifelse(DF.PCA.NA$Q3.Demo.NetworkAnalysisResearch == "Not very well", 2, 
+                                ifelse(DF.PCA.NA$Q3.Demo.NetworkAnalysisResearch == "Somewhat well", 3, 
+                                       ifelse(DF.PCA.NA$Q3.Demo.NetworkAnalysisResearch == "Very well", 4, "Error"))))))
+
+agree4 <- c("Not well at all","Not very well", "Somewhat well", "Very well")
+
+DF.PCA.NA$Q3.Demo.NetworkAnalysisResearch <-
+  factor(DF.PCA.NA$Q3.Demo.NetworkAnalysisResearch, 
+         levels=c(1,2,3,4),
+         labels=agree4,
+         ordered = TRUE)
+
+DF.PCA.NA$Q4.Demo.NetworkVisualizationResearch <-
+  ifelse(DF.PCA.NA$Q4.Demo.NetworkVisualizationResearch == "Unfamiliar", 0, 
+           ifelse(DF.PCA.NA$Q4.Demo.NetworkVisualizationResearch == "Skipped", NA, 
+                  ifelse(DF.PCA.NA$Q4.Demo.NetworkVisualizationResearch == "Not well at all", 1, 
+                         ifelse(DF.PCA.NA$Q4.Demo.NetworkVisualizationResearch == "Not very well", 2, 
+                                ifelse(DF.PCA.NA$Q4.Demo.NetworkVisualizationResearch == "Somewhat well", 3, 
+                                       ifelse(DF.PCA.NA$Q4.Demo.NetworkVisualizationResearch == "Very well", 4, "Error"))))))
+
+DF.PCA.NA$Q4.Demo.NetworkVisualizationResearch <-
+  factor(DF.PCA.NA$Q4.Demo.NetworkVisualizationResearch, 
+         levels=c(1,2,3,4),
+         labels=agree4,
+         ordered = TRUE)
+
+DF.PCA.NA$Q11.Demo.HowOftenProduceVis <-
+  ifelse(DF.PCA.NA$Q11.Demo.HowOftenProduceVis == "Unfamiliar", 0, 
+           ifelse(DF.PCA.NA$Q11.Demo.HowOftenProduceVis == "Skipped", NA, 
+                  ifelse(DF.PCA.NA$Q11.Demo.HowOftenProduceVis == "Never", 1, 
+                         ifelse(DF.PCA.NA$Q11.Demo.HowOftenProduceVis == "Rarely", 2, 
+                                ifelse(DF.PCA.NA$Q11.Demo.HowOftenProduceVis == "Sometimes", 3, 
+                                       ifelse(DF.PCA.NA$Q11.Demo.HowOftenProduceVis == "Most of the time", 4, 
+                                              ifelse(DF.PCA.NA$Q11.Demo.HowOftenProduceVis == "Always", 5, "Error")))))))
+
+freq5 <- c("Never","Rarely", "Sometimes", "Most of the time", "Always")
+
+DF.PCA.NA$Q11.Demo.HowOftenProduceVis <- 
+  factor(DF.PCA.NA$Q11.Demo.HowOftenProduceVis,
+                    levels = c(1,2,3,4,5),
+                    labels = freq5,
+                    ordered = TRUE)
+
+for (col in c(8:43)){
+  DF.PCA.NA[,col] <- 
+    ifelse(DF.PCA.NA[,col] == "Unfamiliar", 0, 
+           ifelse(DF.PCA.NA[,col] == "Skipped", NA, 
+                  ifelse(DF.PCA.NA[,col] == "Never/almost never", 1, 
+                         ifelse(DF.PCA.NA[,col] == "Seldom/rarely", 2, 
+                                ifelse(DF.PCA.NA[,col] == "Often", 3, 
+                                       ifelse(DF.PCA.NA[,col] == "Almost always/always", 4, "Error"))))))
+}
+
+for (col in c(8:43)){
+  DF.PCA.NA[,col] <- factor(DF.PCA.NA[,col],levels=c(0,1,2,3,4),labels=c("Unfamiliar","Never/almost never","Seldom/rarely","Often","Almost always/always"),ordered=TRUE)
+}
+
+for (col in c(44:77)){
+  DF.PCA.NA[,col] <- 
+    ifelse(DF.PCA.NA[,col] == "Unfamiliar", 0, 
+           ifelse(DF.PCA.NA[,col] == "Skipped", NA, 
+                  ifelse(DF.PCA.NA[,col] == "Very low", 1, 
+                         ifelse(DF.PCA.NA[,col] == "Somewhat low", 2, 
+                                ifelse(DF.PCA.NA[,col] == "Somewhat high", 3, 
+                                       ifelse(DF.PCA.NA[,col] == "Very high", 4, "Error"))))))
+}
+
+for (col in c(44:77)){
+  DF.PCA.NA[,col] <- factor(DF.PCA.NA[,col],levels=c(0,1,2,3,4),labels=c("Unfamiliar","Very low","Somewhat low","Somewhat high","Very high"),ordered=TRUE)
+}
+
+for (col in c(78:93)){
+  DF.PCA.NA[,col] <- 
+    ifelse(DF.PCA.NA[,col] == "Unfamiliar", 0, 
+           ifelse(DF.PCA.NA[,col] == "Skipped", NA, 
+                  ifelse(DF.PCA.NA[,col] == "Never/almost never", 1, 
+                         ifelse(DF.PCA.NA[,col] == "Seldom/rarely", 2, 
+                                ifelse(DF.PCA.NA[,col] == "Often", 3, 
+                                       ifelse(DF.PCA.NA[,col] == "Almost always/always", 4, "Error"))))))
+}
+
+for (col in c(78:93)){
+  DF.PCA.NA[,col] <- factor(DF.PCA.NA[,col],levels=c(0,1,2,3,4),labels=c("Unfamiliar","Never/almost never","Seldom/rarely","Often","Almost always/always"),ordered=TRUE)
+}
+```
+
+## Test for people who skipped too many of the Importance/Estimability questions (redundant with refactored code, which should produce a pca_table file with only 51 participants, but have to run to keep column numbers correct later)
+```{r}
+
+DF.PCA.NA$TotalSkipped <- rowSums(is.na(DF.PCA.NA))
+
+DF.PCA.NA$ActiveSkipped <- rowSums(is.na(DF.PCA.NA[44:77]))
+
+# extra omit user "R_djvhaRoxinvZmw1"
+
+DF.PCA.NA <- DF.PCA.NA[DF.PCA.NA$ActiveSkipped < 3,]
+
+```
+
+```{r}
+# new variables
+
+DF.PCA.NA$ActiveVHigh <- rowSums(DF.PCA.NA[,44:77] == "Very high", na.rm=TRUE)
+DF.PCA.NA$ActiveSHigh <- rowSums(DF.PCA.NA[,44:77] == "Somewhat high", na.rm=TRUE)
+DF.PCA.NA$ActiveSLow <- rowSums(DF.PCA.NA[,44:77] == "Somewhat low", na.rm=TRUE)
+DF.PCA.NA$ActiveVLow <- rowSums(DF.PCA.NA[,44:77] == "Very low", na.rm=TRUE)
+DF.PCA.NA$ActiveUnfam <- rowSums(DF.PCA.NA[,44:77] == "Unfamiliar", na.rm=TRUE)
+
+#DF.PCA.NA$TotalActive <- rowSums(DF.PCA.NA[,c(95:100)], na.rm=TRUE)
+
+DF.PCA.NA$AToolsUnfam <- rowSums(DF.PCA.NA[,8:25] == "Unfamiliar", na.rm=TRUE)
+
+DF.PCA.NA$VToolsUnfam <- rowSums(DF.PCA.NA[,26:43] == "Unfamiliar", na.rm=TRUE)
+
+DF.PCA.NA$LayoutsUnfam <- rowSums(DF.PCA.NA[,78:93] == "Unfamiliar", na.rm=TRUE)
+
+DF.PCA.NA$has_phd <- ifelse(DF.PCA.NA$Q15.Demo.HighestDegree == "Doctoral",1,0)
+
+DF.PCA.NA$has_phd <- factor(DF.PCA.NA$has_phd, labels=c("no Doctorate","Doctorate"))
+
+Humanities <- c("Anthropology", "Arts", "Classics", "History", "Languages", "Literature", "Philosophy", "Religion")
+
+SocialSciences <- c("Archaeology", "Communication studies", "Cultural and ethnic studies", "Economics", "Geography", "History", "Information science", "Linguistics", "Political science", "Psychology", "Sociology")
+
+LifeSciences <- c("Biology", "Chemistry", "Earth sciences", "Physics", "Space sciences")
+
+FormalSciences <- c("Mathematics", "Computer sciences", "Logic", "Statistics", "Systems science")
+
+Professional <- c("Architecture and design", "Business", "Divinity", "Education", "Engineering", "Human physical performance and recreation", "Journalism, media studies and communication", "Law", "Library and museum studies", "Medicine", "Military sciences", "Public administration")
+
+Other <- c("Other")
+
+DF.PCA.NA$FieldGroups <- 
+  ifelse(DF.PCA.NA$Q5.Demo.PrimaryAcademicField %in% Humanities, 1, 
+         ifelse(DF.PCA.NA$Q5.Demo.PrimaryAcademicField %in% SocialSciences, 2,
+                ifelse(DF.PCA.NA$Q5.Demo.PrimaryAcademicField %in% LifeSciences, 3,
+                       ifelse(DF.PCA.NA$Q5.Demo.PrimaryAcademicField %in% FormalSciences, 4,
+                              ifelse(DF.PCA.NA$Q5.Demo.PrimaryAcademicField %in% Professional, 5, 6)))))
+
+DF.PCA.NA$FieldGroups <- factor(DF.PCA.NA$FieldGroups, 
+                                levels=c(1:6),
+                                labels=c("Humanities", "Social Sciences", "Life Sciences", "Formal Sciences", "Professional", "Other"))
+
+
+```
+
+## redundant test for participants who skipped Importance/Estimability questions, now on the "Skipped" dataset??
+```{r}
+
+DF.PCA$TotalSkipped <- rowSums(DF.PCA == "Skipped")
+
+DF.PCA$ActiveSkipped <- rowSums(DF.PCA[44:77] == "Skipped")
+
+# extra omit user "R_djvhaRoxinvZmw1"
+
+DF.PCA <- DF.PCA[DF.PCA$ActiveSkipped < 3,]
+
+```
+
+```{r}
+
+# new variables for Skipped dataset
+
+DF.PCA$ActiveVHigh <- rowSums(DF.PCA[,44:77] == "Very high", na.rm=TRUE)
+DF.PCA$ActiveSHigh <- rowSums(DF.PCA[,44:77] == "Somewhat high", na.rm=TRUE)
+DF.PCA$ActiveSLow <- rowSums(DF.PCA[,44:77] == "Somewhat low", na.rm=TRUE)
+DF.PCA$ActiveVLow <- rowSums(DF.PCA[,44:77] == "Very low", na.rm=TRUE)
+DF.PCA$ActiveUnfam <- rowSums(DF.PCA[,44:77] == "Unfamiliar", na.rm=TRUE)
+
+#DF.PCA$TotalActive <- rowSums(DF.PCA[,c(95:100)], na.rm=TRUE)
+
+DF.PCA$AToolsUnfam <- rowSums(DF.PCA[,8:25] == "Unfamiliar", na.rm=TRUE)
+
+DF.PCA$VToolsUnfam <- rowSums(DF.PCA[,26:43] == "Unfamiliar", na.rm=TRUE)
+
+DF.PCA$LayoutsUnfam <- rowSums(DF.PCA[,78:93] == "Unfamiliar", na.rm=TRUE)
+
+DF.PCA$has_phd <- ifelse(DF.PCA$Q15.Demo.HighestDegree == "Doctoral",1,0)
+
+DF.PCA$has_phd <- factor(DF.PCA$has_phd, labels=c("no Doctorate","Doctorate"))
+
+#Humanities <- c("Anthropology", "Arts", "Classics", "History", "Languages", "Literature", "Philosophy", "Religion")
+
+#SocialSciences <- c("Archaeology", "Communication studies", "Cultural and ethnic studies", "Economics", "Geography", "History", "Information science", "Linguistics", "Political science", "Psychology", "Sociology")
+
+#LifeSciences <- c("Biology", "Chemistry", "Earth sciences", "Physics", "Space sciences")
+
+#FormalSciences <- c("Mathematics", "Computer sciences", "Logic", "Statistics", "Systems science")
+
+#Professional <- c("Architecture and design", "Business", "Divinity", "Education", "Engineering", "Human physical performance and recreation", "Journalism, media studies and communication", "Law", "Library and museum studies", "Medicine", "Military sciences", "Public administration")
+
+#Other <- c("Other")
+
+DF.PCA$FieldGroups <- 
+  ifelse(DF.PCA$Q5.Demo.PrimaryAcademicField %in% Humanities, 1, 
+         ifelse(DF.PCA$Q5.Demo.PrimaryAcademicField %in% SocialSciences, 2,
+                ifelse(DF.PCA$Q5.Demo.PrimaryAcademicField %in% LifeSciences, 3,
+                       ifelse(DF.PCA$Q5.Demo.PrimaryAcademicField %in% FormalSciences, 4,
+                              ifelse(DF.PCA$Q5.Demo.PrimaryAcademicField %in% Professional, 5, 6)))))
+
+DF.PCA$FieldGroups <- factor(DF.PCA$FieldGroups, 
+                                levels=c(1:6),
+                                labels=c("Humanities", "Social Sciences", "Life Sciences", "Formal Sciences", "Professional", "Other"))
+
+```
+
+```{r}
+
+# Notes on running a factor analysis on categorical data
+
+# suggestions from http://stats.stackexchange.com/questions/5774/can-principal-component-analysis-be-applied-to-datasets-containing-a-mix-of-cont
+
+# from https://en.wikipedia.org/wiki/Multiple_correspondence_analysis
+
+# idea #1: convert current matrix to one where every categorical variable is converted to a series of binary/dummy variables for each possible response, then run Correspondence Analysis
+
+# idea #2: create crosstab table between all of the categorical variables (a "Burt table"), then run Correspondence Analysis
+
+# MCA can also be run using FactoMineR
+
+# http://factominer.free.fr/classical-methods/multiple-correspondence-analysis.html
+
+# Multiple Factor Analysis, however, pays attention to groups of variables. Built into FactoMineR (AFDM())
+
+# http://factominer.free.fr/advanced-methods/multiple-factor-analysis.html
+```
+
+## Try using missMDA to impute missing data; won't get used in actually plotting the data?  Then use for additional analyses.
+
+```{r}
+# should be able to estimate number of components needed for imputation, but doesn't work
+
+#nb <- estim_ncpMCA(DF.PCA.NA[,c(44:77)])
+#result: Error in tab.disj.comp - vrai.tab : non-conformable arrays
+
+complete.MCA <- imputeMCA(DF.PCA.NA[,c(44:77)])
+#complete.3 <- imputeMCA(DF.PCA.NA[,c(44:77)],ncp=3)
+#complete.4 <- imputeMCA(DF.PCA.NA,ncp=4)
+#complete.5 <- imputeMCA(DF.PCA.NA,ncp=5)
+
+res.MCA.imputed <- MCA(DF.PCA.NA, tab.disj = complete.MCA$tab.disj, quali.sup=c(1:43,78:93,104:105), quanti.sup=c(94:103))
+
+#dimdesc(res.MCA.imputed)
+
+#summary(res.MCA.imputed, nbelements = Inf, file="summary_MCA_imputed.txt")
+
+#clust.MCA.imputed <- HCPC(res.MCA.imputed)
+clust.MCA.imputed <- HCPC(res.MCA.imputed, nb.clust=4)
+
+clust.MCA.imputed.assign <- clust.MCA.imputed$call$X[,6,drop=FALSE]
+
+names(clust.MCA.imputed.assign) <- "MCA.imputed"
+
+```
+
+```{r}
+res.MCA.NA <- MCA(DF.PCA.NA, quali.sup=c(1:43,78:93,104:105),quanti.sup=c(94:103))
+                       
+#clust.MCA.NA <- HCPC(res.MCA.NA)
+clust.MCA.NA <- HCPC(res.MCA.NA, nb.clust=4)
+                       
+clust.MCA.NA.assign <- clust.MCA.NA$call$X[,6,drop=FALSE]
+                       
+names(clust.MCA.NA.assign) <- "MCA.NA"
+```
+
+```{r}
+res.MCA.Skipped <- MCA(DF.PCA, quali.sup=c(1:43,78:93,104:105),quanti.sup=c(94:103)) 
+
+#clust.MCA.Skipped <- HCPC(res.MCA.Skipped)
+clust.MCA.Skipped <- HCPC(res.MCA.Skipped, nb.clust=4)
+
+
+clust.MCA.Skipped.assign <- clust.MCA.Skipped$call$X[,6,drop=FALSE]
+
+names(clust.MCA.Skipped.assign) <- "MCA.Skipped"
+```
+
+```{r}
+
+# Note: can't run MFA with both supplemental variables and imputed data
+
+res.MFA.NA <- MFA(DF.PCA.NA, group=c(1,1,2,2,1,18,18,17,17,16,10,2), type=c(rep("n",10),"s","n"), name.group=c("ac.field","high.degree","cons.prod","res.analysis.vis","freq.prod","analysis.tools","vis.tools","estimable.measure","important.measure","layouts","answer.summary","grouped_demo"),num.group.sup=c(1:7,10:12))
+
+#clust.MFA.NA <- HCPC(res.MFA.NA)
+clust.MFA.NA <- HCPC(res.MFA.NA, nb.clust=4)
+
+clust.MFA.NA.assign <- clust.MFA.NA$call$X[,6,drop=FALSE]
+
+names(clust.MFA.NA.assign) <- "MFA.NA"
+```
+
+```{r}
+# impute and cluster just the active variables
+
+complete.MFA.active <- imputeMFA(DF.PCA.NA[,c(44:77)], group=c(17,17), type=(rep("n",2)), name.group=c("estimable.measure","important.measure"))
+
+res.MFA.actimp <- MFA(DF.PCA.NA[,c(44:77)], group=c(17,17), type=(rep("n",2)), name.group=c("estimable.measure","important.measure"),tab.comp = complete.MFA.active)
+
+#clust.MFA.actimp <- HCPC(res.MFA.actimp)
+clust.MFA.actimp <- HCPC(res.MFA.actimp, nb.clust=4)
+
+clust.MFA.actimp.assign <- clust.MFA.actimp$call$X[,6,drop=FALSE]
+
+names(clust.MFA.actimp.assign) <- "MFA.actimp"
+```
+
+```{r}
+# impute and cluster entire table, keeping all variables active; this produces wildly different clustering results
+
+complete.MFA <- imputeMFA(DF.PCA.NA, group=c(1,1,2,2,1,18,18,17,17,16,10,2), type=c(rep("n",10),"s","n"), name.group=c("ac.field","high.degree","cons.prod","res.analysis.vis","freq.prod","analysis.tools","vis.tools","estimable.measure","important.measure","layouts","answer.summary","grouped_demo"))
+
+res.MFA.imputed <- MFA(DF.PCA.NA, group=c(1,1,2,2,1,18,18,17,17,16,10,2), type=c(rep("n",10),"s","n"), name.group=c("ac.field","high.degree","cons.prod","res.analysis.vis","freq.prod","analysis.tools","vis.tools","estimable.measure","important.measure","layouts","answer.summary","grouped_demo"),tab.comp=complete.MFA)
+
+#clust.MFA.imputed <- HCPC(res.MFA.imputed)
+clust.MFA.imputed <- HCPC(res.MFA.imputed, nb.clust=4)
+
+
+clust.MFA.imputed.assign <- clust.MFA.imputed$call$X[,6,drop=FALSE]
+
+names(clust.MFA.imputed.assign) <- "MFA.imputed"
+```
+
+```{r}
+# run MFA on "Skipped" data
+
+res.MFA.Skipped <- MFA(DF.PCA, group=c(1,1,2,2,1,18,18,17,17,16,10,2), type=c(rep("n",10),"s","n"), name.group=c("ac.field","high.degree","cons.prod","res.analysis.vis","freq.prod","analysis.tools","vis.tools","estimable.measure","important.measure","layouts","answer.summary","grouped_demo"),num.group.sup=c(1:7,10:12))
+
+#clust.MFA.Skipped <- HCPC(res.MFA.Skipped)
+clust.MFA.Skipped <- HCPC(res.MFA.Skipped, nb.clust=4)
+
+clust.MFA.Skipped.assign <- clust.MFA.Skipped$call$X[,6,drop=FALSE]
+
+names(clust.MFA.Skipped.assign) <- "MFA.Skipped"
+```
+
+```{r}
+# different grouping; didn't change clusters
+
+res.MFA.Skipped.group2 <- MFA(DF.PCA, group=c(7,18,18,17,17,16,10,2), type=c(rep("n",6),"s","n"), name.group=c("demo","analysis.tools","vis.tools","estimable.measure","important.measure","layouts","answer.summary","grouped_demo"),num.group.sup=c(1:3,6:8))
+
+#clust.MFA.Skipped.group2 <- HCPC(res.MFA.Skipped.group2)
+clust.MFA.Skipped.group2 <- HCPC(res.MFA.Skipped.group2, nb.clust=4)
+
+clust.MFA.Skipped.group2.assign <- clust.MFA.Skipped.group2$call$X[,6,drop=FALSE]
+
+names(clust.MFA.Skipped.group2.assign) <- "MFA.Skipped.group2"
+```
+
+
+
+```{r}
+all.assignments <- merge(clust.MCA.imputed.assign, clust.MCA.NA.assign, by="row.names")
+
+rownames(all.assignments) <- all.assignments[,1]
+
+all.assignments <- all.assignments[,-1]
+
+all.assignments <- merge(all.assignments, clust.MCA.Skipped.assign, by="row.names")
+
+rownames(all.assignments) <- all.assignments[,1]
+
+all.assignments <- all.assignments[,-1]
+
+all.assignments <- merge(all.assignments, clust.MFA.actimp.assign, by="row.names")
+
+rownames(all.assignments) <- all.assignments[,1]
+
+all.assignments <- all.assignments[,-1]
+
+# not using MFA.imputed
+
+#all.assignments <- merge(all.assignments, clust.MFA.imputed.assign, by="row.names")
+
+#rownames(all.assignments) <- all.assignments[,1]
+
+#all.assignments <- all.assignments[,-1]
+
+all.assignments <- merge(all.assignments, clust.MFA.NA.assign, by="row.names")
+
+rownames(all.assignments) <- all.assignments[,1]
+
+all.assignments <- all.assignments[,-1]
+
+all.assignments <- merge(all.assignments, clust.MFA.Skipped.assign, by="row.names")
+
+rownames(all.assignments) <- all.assignments[,1]
+
+all.assignments <- all.assignments[,-1]
+
+all.assignments <- merge(all.assignments, clust.MFA.Skipped.group2.assign, by="row.names")
+
+rownames(all.assignments) <- all.assignments[,1]
+
+all.assignments <- all.assignments[,-1]
+
+for(col in 1:7) {
+  all.assignments[,col] <- as.numeric(all.assignments[,col])
+}
+```
+
+```{r}
+
+all.assignments$agreement <- ifelse(rowMeans(all.assignments[,1:7]) %% 1 > 0.0, FALSE, TRUE)
+
+all.assignments$mode <- apply(all.assignments[,1:7], 1, 
+                                   function(idx) { which(tabulate(idx) == max(tabulate(idx)))})
+
+
+
+```
+
+```{r}
+
+# group all.assignments by mode (i.e., cluster number) and count participants
+
+cluster.data <- dplyr::rename(all.assignments, cluster=mode) %>% group_by(cluster) %>% summarise(num.participants=n())
+
+```
+
+```{r}
+
+#output final cluster assignments
+
+final_assignments <- dplyr::select(tibble::rownames_to_column(all.assignments), rowname, mode)
+
+final_assignments <- dplyr::rename(final_assignments,V1.Demo.ResponseID=rowname,cluster=mode)
+
+write.csv(final_assignments, file = "final_assignments.csv",row.names=FALSE)
+
+```
+
+```{r}
+#dimdesc(res.MFA.NA)
+
+#summary(res.MFA.NA, nbelements = Inf, file="summary_MFA.txt")
+
+#clust.MFA.NA$desc.var
+#clust.MFA.NA$desc.ind
+
+
+# maybe use ggplot instead?
+# http://stackoverflow.com/questions/10252639/pca-factominer-plot-data
+
+# extract some parts for plotting
+PC1 <- res.MFA.NA$ind$coord[,1]
+PC2 <- res.MFA.NA$ind$coord[,2]
+PC3 <- res.MFA.NA$ind$coord[,3]
+PC4 <- res.MFA.NA$ind$coord[,4]
+PC5 <- res.MFA.NA$ind$coord[,5]
+labs <- rownames(res.MFA.NA$ind$coord)
+PCs <- data.frame(cbind(PC1,PC2,PC3,PC4,PC5))
+rownames(PCs) <- labs
+
+data_with_clusts <- merge(DF.PCA.NA, clust.MFA.NA.assign, by="row.names")
+
+rownames(data_with_clusts) <- data_with_clusts[,1]
+
+data_with_clusts <- data_with_clusts[,-1]
+
+data_with_clusts <- merge(data_with_clusts, PCs, by="row.names")
+
+rownames(data_with_clusts) <- data_with_clusts[,1]
+
+data_with_clusts <- data_with_clusts[,-1]
+
+data_with_clusts$extremes <- rowSums(data_with_clusts[,c(96,99)])
+```
+
+```{r}
+
+# extract some parts for plotting
+var1 <- res.MFA.NA$quanti.var.sup$coord[,1]
+var2 <- res.MFA.NA$quanti.var.sup$coord[,2]
+var3 <- res.MFA.NA$quanti.var.sup$coord[,3]
+var4 <- res.MFA.NA$quanti.var.sup$coord[,4]
+var5 <- res.MFA.NA$quanti.var.sup$coord[,5]
+vars <- data.frame(cbind(var1,var2,var3,var4,var5))
+#vars$names <- rownames(res.MFA.NA$quanti.var.sup$coord)
+vars$names <- c("Total Skipped","Measures Skipped","Very High Responses", "Somewhat High Responses","Somewhat Low Responses","Very Low Responses", "Measures Unfamiliar", "Analysis Tools Unfamiliar", "Visualization Tools Unfamiliar", "Layouts Unfamiliar")
+
+ggplot(vars, aes(var1,var2)) + 
+  geom_point(size=10,alpha=.7) + 
+  geom_text(aes(label=names)) +
+  labs(#title="Layout title.",
+       x="Dimension 1",
+       y="Dimension 2") +
+  theme_bw()
+
+```
+
+```{r 'clust-dim12', fig.width=6.5, fig.height=6}
+# plots of clustering results compared to demographic variables, etc.
+
+clust_dim12 <- 
+ggplot(data_with_clusts) + 
+  geom_point(aes(PC1,PC2,col=MFA.NA),size=10,alpha=.7) + 
+  scale_color_discrete(name="Cluster") +
+  labs(#title="Layout title.",
+       x="Dimension 1",
+       y="Dimension 2") +
+  #scale_x_reverse() +
+  theme_bw(base_size = 18)
+
+clust_dim12
+
+ggsave("clust_dim12.png", clust_dim12, width = 10, height = 9)
+
+```
+
+```{r 'biplot-with-arrows', fig.width=6.5, fig.height=6}
+# plots of clustering results compared to demographic variables, etc.
+
+biplot_with_arrows <- 
+ggplot() + 
+  geom_point(data=data_with_clusts, aes(PC1,PC2,col=MFA.NA),size=10,alpha=.7) + 
+  #geom_point(data=vars, aes(var1,var2)) +
+  geom_segment(data = vars[c(3:6),], aes(xend = var1, yend=var2),
+              x=0, y=0, colour="black",
+              arrow=arrow(angle=20, type="closed")) +
+  geom_text(data=vars[c(3:6),], aes(x=1.2*var1,y=1.2*var2, label=names), size=6) +
+  scale_color_discrete(name="Cluster") +
+  labs(#title="Layout title.",
+       x="Dimension 1",
+       y="Dimension 2") +
+  #scale_x_reverse() +
+  theme_bw(base_size = 18)
+
+biplot_with_arrows
+
+ggsave("biplot_with_arrows.png", biplot_with_arrows, width = 10, height = 9)
+
+```
+
+```{r}
+# plots of clustering results compared to demographic variables, etc.
+
+ggplot(tibble::rownames_to_column(data_with_clusts), aes(PC1,PC2)) + 
+  geom_point(aes(col=MFA.NA), size=5,alpha=.7) + 
+  geom_text(aes(label=rowname, size=(factor(rowname=="R_1IsoEfA2NxRGhHX",levels=c(TRUE,FALSE),ordered=TRUE,labels=c("Yes","No"))))) +
+  scale_color_discrete(name="Cluster") +
+  scale_size_manual(values=c(3,1)) +
+  guides(size="none") +
+  labs(#title="Layout title.",
+       x="Dimension 1",
+       y="Dimension 2") +
+  theme_bw()
+
+```
+
+```{r 'biplot_with_sizes', fig.width=6.5}
+
+grid_data <- data_with_clusts %>% dplyr::select(PC1, PC2, ActiveVHigh, extremes, MFA.NA)
+grid_data$user <- row.names(grid_data)
+
+grid_data_wide <- tidyr::gather(grid_data, "Indicator", "NumResponses", c(3:4))
+grid_data_wide$Indicator <- factor(grid_data_wide$Indicator, labels = c("Very High Responses","Extreme Responses"))
+  
+ggplot(grid_data_wide) + 
+  geom_point(aes(PC1,PC2,size=NumResponses,col=MFA.NA),alpha=.7) + 
+  scale_color_discrete(name="Cluster") +
+  scale_size_continuous(name="Number of Responses") +
+  labs(#title="Layout title.",
+       x="Dimension 1",
+       y="Dimension 2") +
+  #scale_x_reverse() +
+  theme_bw(base_size = 13) +
+  facet_grid(.~Indicator)
+  
+```
+
+```{r, fig.width=10, fig.height=8}
+
+ggplot(data_with_clusts) + 
+  geom_point(aes(PC1,PC2,size=ActiveVLow,col=MFA.NA),alpha=.7) + 
+  scale_color_discrete(name="Cluster") +
+  scale_size_continuous(name="No. 'Very Low'\nanswers") +
+  labs(#title="Layout title.",
+       x="Dimension 1",
+       y="Dimension 2") +
+  theme_bw() 
+
+```
+
+```{r}
+
+#ggplot(data_with_clusts) + geom_point(aes(PC1,PC2,col=ActiveVLow),size=5,alpha=.7) + theme_bw() + scale_color_gradient(low="grey50",high="grey1")
+
+```
+
+```{r, fig.width=10, fig.height=8}
+
+ggplot(data_with_clusts) + 
+  geom_point(aes(PC1,PC2,size=extremes,col=MFA.NA),alpha=.7) + 
+  scale_color_discrete(name="Cluster") +
+  scale_size_continuous(name="No. 'extreme'\nanswers") +
+  labs(#title="Layout title.",
+       x="Dimension 1",
+       y="Dimension 2") +
+  theme_bw()
+
+```
+
+```{r 'scatter-pc1', fig.width=3.25, fig.height=2.5}
+
+modelpc1 <- lm(formula = PC1 ~ sqrt(ActiveVLow), data = data_with_clusts)
+r2pc1 <- format(summary(modelpc1)$r.squared, digits = 3)
+
+modelpc1plot <- 
+  ggplot(data_with_clusts) + 
+  geom_point(aes(y=PC1,x=sqrt(ActiveVLow), fill=MFA.NA), alpha=.7, size=4, color="gray", pch=21) + 
+  geom_smooth(aes(x=sqrt(ActiveVLow), y=PC1), method = "lm", se=FALSE, color = "gray") + 
+  geom_text(y=3,x=5.2, label=paste("R^2 == ", r2pc1), parse=TRUE, size=4) +
+  scale_fill_manual(name="Cluster", values=c("#fef0d9","#fdcc8a","#fc8d59","#d7301f")) +
+  #guides(color = "none") +
+  scale_y_reverse(limits=c(3.5,-3.5)) + 
+  scale_x_continuous(limits=c(0,5.7)) + 
+  labs(title="A. Explaining variation in Dimension 1",
+       y="Dimension 1",
+       x="Square Root of Number of Very Low Responses") +
+  theme_bw(base_size = 14)
+
+modelpc1plot
+
+```
+
+
+```{r 'scatter-pc2', fig.width=3.25, fig.height=2.5}
+
+modelpc2 <- lm(formula = PC2 ~ sqrt(ActiveSLow), data = data_with_clusts)
+r2pc2 <- format(summary(modelpc2)$r.squared, digits = 3)
+
+modelpc2plot <- 
+  ggplot(data_with_clusts) + 
+  geom_point(aes(y=PC2,x=sqrt(ActiveSLow), fill=MFA.NA), alpha=.7, size=4, color="gray", pch=21) + 
+  geom_smooth(aes(x=sqrt(ActiveSLow), y=PC2), method = "lm", se=FALSE, color = "gray") + 
+  geom_text(x=5.2,y=3, label=paste("R^2 == ", r2pc2), parse=TRUE, size=4) +
+  scale_fill_manual(name="Cluster", values=c("#fef0d9","#fdcc8a","#fc8d59","#d7301f")) +
+  scale_y_continuous(limits=c(-3.5,3.5)) +
+  scale_x_continuous(limits=c(0,5.7)) + 
+  labs(title="B. Explaining variation in Dimension 2",
+       x="Square Root of Number of Somewhat Low Responses",
+       y="Dimension 2") +
+  theme_bw(base_size = 14)
+
+modelpc2plot
+
+```
+
+```{r 'grid_pcplot', fig.width=6.5, fig.height=3}
+
+grid.arrange(modelpc1plot, modelpc2plot, ncol=2)
+
+multi_panel_pcplot <- arrangeGrob(modelpc1plot, modelpc2plot, ncol=2)
+
+ggsave("multi_panel_pcplot.png", multi_panel_pcplot, width = 12, height = 5)
+
+```
+
+```{r}
+
+ggplot(data_with_clusts) + 
+  geom_boxplot(aes(x=1,y=extremes,col=MFA.NA)) +
+  facet_grid(MFA.NA~.) +
+  labs(x="Cluster",y="Number of 'extreme' answers") +
+  guides(col="none") +
+  coord_flip() +
+  #scale_x_reverse() + 
+  theme_bw() +
+  theme(axis.text.y = element_blank(),axis.ticks.y = element_blank(),panel.grid.major.y = element_blank(),panel.grid.minor.y = element_blank())
+
+```
+
+```{r}
+
+ggplot(data_with_clusts) + 
+  geom_histogram(aes(extremes,fill=MFA.NA),binwidth=3) +
+  facet_grid(MFA.NA~.) +
+  guides(fill="none") +
+  labs(x="Number of 'extreme' answers (binned)", y="Number of participants") +
+  theme_bw()
+
+```
+
+```{r 'responses_by_clust', fig.width=6.5}
+responses_by_clust <- 
+dplyr::select(data_with_clusts, MFA.NA, Estimable_AvgDegree, Estimable_AvgPathLength, Estimable_AvgShortestPath, Estimable_ClosenessCentrality, Estimable_ClusteringCoeff, Estimable_ComponentSize, Estimable_Density, Estimable_Diameter, Estimable_EigenvectorCentrality, Estimable_LinkBC, Estimable_Loops, Estimable_Modularity, Estimable_NodeBC, Estimable_NodeDegree, Estimable_NumComponents, Estimable_NumLinks, Estimable_NumNodes, Important_AvgDegree, Important_AvgPathLength, Important_AvgShortestPath, Important_ClosenessCentrality, Important_ClusteringCoeff, Important_ComponentSize, Important_Density, Important_Diameter, Important_EigenvectorCentrality, Important_LinkBC, Important_Loops, Important_Modularity, Important_NodeBC, Important_NodeDegree, Important_NumComponents, Important_NumLinks, Important_NumNodes) %>% 
+  tidyr::gather("name","answer",2:35) %>% 
+  tidyr::separate(name, c("subgroup","name"), sep="_") %>% 
+  dplyr::mutate(answer = ifelse(is.na(answer), "Skipped", answer)) %>%
+  ggplot(.) + 
+  geom_bar(aes(factor(answer,levels=c("Skipped","Unfamiliar","Very low","Somewhat low","Somewhat high","Very high"),ordered=TRUE),fill=MFA.NA)) +
+  facet_grid(MFA.NA~.) +
+  guides(fill="none") +
+  labs(x="Responses to Importance and Estimability Questions", y="Number of Responses") +
+  theme_bw(base_size=18)
+
+responses_by_clust
+
+ggsave("responses_by_clust.png", responses_by_clust, width = 10, height = 8)
+
+```
+
+```{r}
+
+# according to res.hcpc$desc.var, HowOftenProduceVis is one of the few demographic variables that correlates strongly with one or more of the clusters.  Try to compare plots of that variable and the cluster assignments?
+
+ggplot(data_with_clusts) + geom_point(aes(PC1,PC2,col=Q11.Demo.HowOftenProduceVis),size=5,alpha=.7) + theme_bw()
+
+```
+
+```{r}
+
+#table(data_with_clusts$Q11.Demo.HowOftenProduceVis,data_with_clusts$MFA.NA)
+
+```
+
+```{r 'prodvis_by_clust', fig.width=6.5}
+
+prodvis_by_clust <-
+ggplot(data_with_clusts) + 
+  geom_bar(aes(Q11.Demo.HowOftenProduceVis,fill=MFA.NA)) +
+  facet_grid(.~MFA.NA) +
+  guides(fill="none") +
+  coord_flip() + 
+  labs(x="How often do you produce network visualizations?", y="Number of Participants") +
+  theme_bw(base_size=18)
+
+prodvis_by_clust
+
+ggsave("prodvis_by_clust.png", prodvis_by_clust, width = 10, height = 6)
+
+
+
+```
+
+```{r}
+
+#aggregate(data_with_clusts[,112], list(data_with_clusts$MFA.NA), mean)
+
+#plot(res.MFA.NA, invisible=c("var","quali"), select="contrib 3", habillage=7)
+
+
+```

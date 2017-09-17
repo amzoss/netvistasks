@@ -1,0 +1,4 @@
+"0","#ggsave(""rank_slope.png"",width=13,height=6)"
+"0","#ggsave(""rank_slope.pdf"",width=13,height=6)"
+"0","best_with_full <- unique(measure_ranks[,1:2])"
+"0","names(best_with_full) <- c(""measure_name"",""avg_rank_full"")"

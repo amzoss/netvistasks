@@ -1,0 +1,2 @@
+"0","#clust.MFA.NA <- HCPC(res.MFA.NA)"
+"0","clust.MFA.NA <- HCPC(res.MFA.NA, nb.clust=4)"

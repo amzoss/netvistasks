@@ -1,0 +1,2 @@
+"0","multi_panel <- arrangeGrob(exp_plot, aplot, prod_vis, nrow=3)"
+"0","ggsave(""exp_plot.png"", multi_panel, width = 11.5, height = 10)"

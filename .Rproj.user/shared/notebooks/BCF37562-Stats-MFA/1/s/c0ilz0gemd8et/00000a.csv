@@ -1,0 +1,6 @@
+"0","ggplot(data_with_clusts) + "
+"0","  geom_histogram(aes(extremes,fill=MFA.NA),binwidth=3) +"
+"0","  facet_grid(MFA.NA~.) +"
+"0","  guides(fill=""none"") +"
+"0","  labs(x=""Number of 'extreme' answers (binned)"", y=""Number of participants"") +"
+"0","  theme_bw()"

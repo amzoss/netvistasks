@@ -1,0 +1,8 @@
+"0","# Filter out users who skipped most or all of the Estimability questions. (no longer necessary)"
+"0","est_vs_imp_completed <- filter(est_vs_imp, !(V1.Demo.ResponseID %in% omit_users$V1.Demo.ResponseID))"
+"0","# When grouping by measure, remove a user-measure combination if a user is unfamiliar with or skipped that measure.  Finally, collapse all users by creating totals for the both_pos, both_neg, and mixed columns, then add a new column that stores how many users were left after the filtering."
+"0","measures <- est_vs_imp_completed %>% filter(both_pos >= 0 & both_neg >= 0) %>% group_by(name) %>% summarise(total_pos=sum(both_pos),total_neg=sum(both_neg),total_mixed=sum(mixed),num_responses=n()) %>% collect"
+"0","# Add a ""level"" column that hard codes in what level of analysis the measure represent - element level, cluster level, or graph level."
+"0","measures$level <- ifelse(measures$name %in% c(""EigenvectorCentrality"",""ClosenessCentrality"",""NodeBC"",""NodeDegree"",""Loops"",""LinkBC""),""Element"",ifelse(measures$name %in% c(""AvgShortestPath"",""AvgPathLength"",""Diameter"",""ClusteringCoeff"",""Density"",""NumLinks"",""AvgDegree"",""NumNodes""),""Graph"",ifelse(measures$name %in% c(""Modularity"",""ComponentSize"",""NumComponents""),""Cluster"",""Other"")))"
+"0","# Change level to an ordered factor, so visualizations will turn out nicer."
+"0","measures$level <- factor(measures$level,levels=c(""Element"",""Cluster"",""Graph""),ordered=TRUE)"

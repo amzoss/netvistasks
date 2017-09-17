@@ -1,0 +1,2 @@
+"0","measures_by_user_clust <- merge(measures_by_user_demo,clusters)"
+"0","measures_by_user_clust <- dplyr::select(measures_by_user_clust, -c(group, neg, DO.Q.Q6.DisplayOrderAnalysisTools,DO.Q.Q22.DisplayOrderVisTools,DO.Q.Q9.DisplayOrderLayouts))"

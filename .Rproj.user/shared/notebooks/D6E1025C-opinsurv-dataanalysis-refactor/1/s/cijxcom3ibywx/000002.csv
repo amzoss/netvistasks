@@ -1,0 +1,7 @@
+"0","#table(av$answer)"
+"0","#nrow(av[av$answer == ""Not very well"" ,])"
+"0","nrow(av[av$question == ""Visualization"" & (av$answer == ""Very well"" | av$answer == ""Somewhat\nwell""),])"
+"1","[1]"
+"1"," 22"
+"1","
+"

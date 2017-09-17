@@ -1,0 +1,6 @@
+"0","active_skipped <- DF_split[(DF_split$subgroup == ""Estimable"" | DF_split$subgroup == ""Important"") & is.na(DF_split$unfam) & !(DF_split$name %in% c(""Other"",""OtherTEXT"",""OtherFromImportant"")),c(1,19,20,22)]"
+"0","num_act_skipped <- active_skipped %>% group_by(V1.Demo.ResponseID) %>% summarise(num_skipped = sum(answer == ""-99""), num_vhi = sum(answer == ""Very likely"" | answer == ""Very important""), num_shi = sum(answer == ""Somewhat important"" | answer == ""Somewhat likely""), num_slo = sum(answer == ""Somewhat unlikely"" | answer == ""Somewhat unimportant""), num_vlo = sum(answer == ""Very unlikely"" | answer == ""Very unimportant""))"
+"0","#omit_users <- num_act_skipped[num_act_skipped$num_skipped > 10,1]"
+"0","omit_users <- num_act_skipped[num_act_skipped$num_skipped > 7,1]"
+"0","#completely remove those users from data"
+"0","DF_split <- DF_split[!(DF_split$V1.Demo.ResponseID %in% omit_users$V1.Demo.ResponseID),]"

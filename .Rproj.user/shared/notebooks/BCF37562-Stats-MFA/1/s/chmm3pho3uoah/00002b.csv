@@ -1,0 +1,3 @@
+"0","                       "
+"0","#clust.MCA.NA <- HCPC(res.MCA.NA)"
+"0","clust.MCA.NA <- HCPC(res.MCA.NA, nb.clust=4)"

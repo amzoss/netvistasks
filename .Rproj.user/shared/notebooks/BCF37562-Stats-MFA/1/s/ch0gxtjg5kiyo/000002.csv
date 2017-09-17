@@ -1,0 +1,4 @@
+"0","DF.PCA$TotalSkipped <- rowSums(DF.PCA == ""Skipped"")"
+"0","DF.PCA$ActiveSkipped <- rowSums(DF.PCA[44:77] == ""Skipped"")"
+"0","# extra omit user ""R_djvhaRoxinvZmw1"""
+"0","DF.PCA <- DF.PCA[DF.PCA$ActiveSkipped < 3,]"

@@ -1,0 +1,2 @@
+"0","clust.MFA.actimp.assign <- clust.MFA.actimp$call$X[,6,drop=FALSE]"
+"0","names(clust.MFA.actimp.assign) <- ""MFA.actimp"""

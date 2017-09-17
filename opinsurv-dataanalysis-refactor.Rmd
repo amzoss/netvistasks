@@ -1,0 +1,1523 @@
+---
+title: "Opinion Survey Data Analysis"
+author: "Angela Zoss"
+date: "June 19, 2016"
+output: 
+  html_document:
+    toc: true
+    toc_float: true
+    number_sections: true
+    fig_width: 10
+    code_folding: show
+    keep_md: true
+    
+---
+
+# Analyzing the Opinion Survey Data.
+
+## Setting up the environment.
+
+```{r, message=FALSE}
+require(tidyverse)
+require(readxl)
+require(gridExtra)
+require(grid)
+require(data.table)
+require(MASS)
+require(GGally)
+require(ggmosaic)
+
+```
+
+## Loading the raw data from Qualtrics.
+
+```{r}
+
+new_names <- read_excel("OpinionSurvey-new-names.xlsx")
+
+#DF <- read_csv("OpinionSurvey-rawdata.csv", skip=2, col_names = new_names$NewName, locale = locale(encoding = "Windows-1252"))
+
+DF <- read_csv("OpinionSurvey-rawdata.csv", skip=2, col_names = new_names$NewName)
+
+#DF <- read.csv("OpinionSurvey-rawdata.csv", header=TRUE, stringsAsFactors=FALSE, fileEncoding = "Windows-1252")
+
+DF <- DF %>% dplyr::select(-c(V2.ResponseSet, Q25.SurveyInfoPage))
+
+# creating meaningful subsets of columns
+
+non_demo_vars <- c(12:125,127:202)
+
+free_text_vars <- c(203:205)
+
+# create a subset for analysis including everything but free text variables  
+
+DF_filter <- dplyr::select(DF, -free_text_vars)
+```
+
+## Process the non-demographic data
+
+```{r}
+# reshape data to tall format, but only the real question data (the non- demographic variables). just fill down all of the remaining demographic variables for each row so every question/answer combo can be filtered by the demographic variables. (Probably don't really need to keep the demo vars here, though.  They get dropped later during the group/summarise, then get joined back in when needed.)
+
+DF_ftall <- gather(DF_filter, "question", "answer", non_demo_vars)
+
+
+# prepare former question names for data split into multiple categorical columns
+
+DF_ftall$question <- 
+  sub("AnalysisTools","Tools.Analysis",DF_ftall$question)
+
+DF_ftall$question <- 
+  sub("VisTools","Tools.Vis",DF_ftall$question)
+
+DF_ftall$question <- 
+  sub("Network.Workbench","NetworkWorkbench",DF_ftall$question)
+
+DF_ftall$question <- 
+  sub("Q9.1_1_1.Layouts..Deterministic","Q9.1_1_1.Layouts..DeterministicUnfamiliar",DF_ftall$question)
+
+DF_ftall$question <- sub("Unfamiliar",".Unfamiliar",DF_ftall$question)
+
+# complete the split, creating multiple grouping columns
+
+DF_split <- separate(DF_ftall,question,c("qnum","variant","group","subgroup","name","unfam"),sep="[.]", fill="right")
+
+```
+
+Calculate which users skipped too many of the Importance or Estimability questions.
+
+```{r}
+
+active_skipped <- DF_split[(DF_split$subgroup == "Estimable" | DF_split$subgroup == "Important") & is.na(DF_split$unfam) & !(DF_split$name %in% c("Other","OtherTEXT","OtherFromImportant")),c(1,19,20,22)]
+
+num_act_skipped <- active_skipped %>% group_by(V1.Demo.ResponseID) %>% summarise(num_skipped = sum(answer == "-99"), num_vhi = sum(answer == "Very likely" | answer == "Very important"), num_shi = sum(answer == "Somewhat important" | answer == "Somewhat likely"), num_slo = sum(answer == "Somewhat unlikely" | answer == "Somewhat unimportant"), num_vlo = sum(answer == "Very unlikely" | answer == "Very unimportant"))
+
+#omit_users <- num_act_skipped[num_act_skipped$num_skipped > 10,1]
+
+omit_users <- num_act_skipped[num_act_skipped$num_skipped > 7,1]
+
+#completely remove those users from data
+
+DF_split <- DF_split[!(DF_split$V1.Demo.ResponseID %in% omit_users$V1.Demo.ResponseID),]
+
+```
+
+
+```{r}
+# Separate the answers that involve selecting "Other" and then filling in a text field
+
+DF_split_other <- filter(DF_split, name %in% c("Other","OtherTEXT","OtherFromImportant"))
+
+DF_split_rest <- filter(DF_split, !(name %in% c("Other","OtherTEXT","OtherFromImportant")))
+
+```
+
+
+## Process the demographic data
+
+```{r}
+
+# generate subset of demographic columns from original dataset 
+# convert demo columns to tall format for some of the joint charts
+
+# getting some kind of "unknown column: text" warning, but seems to still work okay
+
+demo_cols <- dplyr::select(DF_filter, -non_demo_vars) %>% filter(!(V1.Demo.ResponseID %in% omit_users$V1.Demo.ResponseID))
+
+demo_cols_subset <- demo_cols[,c(1,5,6,8:12)]
+
+demo_cols_tall <- gather(demo_cols_subset,"question","answer",2:8)
+
+demo_cols_tall$answer[demo_cols_tall$answer==-99] <- "Skipped"
+
+```
+
+
+# Summarizing participants and responses
+
+## Academic field and highest degree
+
+**Questions:**
+
+1. What is your primary academic field?
+
+     *If you are active in multiple fields, choose the field in which you've received the most training.*
+
+2. What is the highest degree or level of school you have completed?
+
+     *If currently enrolled, highest degree received.*
+
+```{r}
+
+# R seems to have trouble with the apostrophes in the question text; replace those before creating a factor
+
+hd <- filter(demo_cols_tall, (question == "Q15.Demo.HighestDegree" | question == "Q5.Demo.PrimaryAcademicField"))
+
+hd_wide <- spread(hd, question, answer)
+
+
+# Create a factor to force a natural ordering of the degrees
+
+hd_wide$Q15.Demo.HighestDegree <- factor(hd_wide$Q15.Demo.HighestDegree, 
+                                    levels=c("Bachelor’s degree",
+                                             "Master’s degree",
+                                             "Professional degree", 
+                                             "Doctorate degree", 
+                                             "Other"),
+                                    labels=c("Bachelor’s",
+                                             "Master’s",
+                                             "Professional",
+                                             "Doctoral",
+                                             "Other"),
+                                    ordered = TRUE)
+
+# Order the fields by the number of participants selecting each field
+
+hd_wide$Q5.Demo.PrimaryAcademicField <- factor(hd_wide$Q5.Demo.PrimaryAcademicField,
+                                          levels=names(
+                                            sort(
+                                              table(
+                                                hd_wide$Q5.Demo.PrimaryAcademicField))))
+```
+
+```{r 'fielddegree-stacked', fig.width=6.5}
+
+# Stacked bar chart
+
+ggplot(hd_wide) + 
+  geom_bar(aes(x=Q5.Demo.PrimaryAcademicField, fill=Q15.Demo.HighestDegree)) + 
+  coord_flip() +
+  scale_fill_brewer(palette="YlGnBu",
+                    name="Highest Degree Completed")  +
+  labs(#title="Participants come mostly from Sociology,\nhave completed Master's degrees\n",
+       x="Primary academic field",
+       y="Number of participants") +
+  scale_y_continuous(limits=c(0,10),breaks=c(0,5,10),minor_breaks=NULL) + 
+  theme_bw() +
+  theme(legend.position="top", 
+        panel.grid.major.y = element_blank(),
+        panel.grid.major.x = element_line(size=.1, color="grey"),
+        plot.title = element_text(hjust = 0, size=22))
+```
+
+```{r 'fielddegree-faceted',fig.width=6.5}
+# Faceted bar chart
+
+fielddegree_faceted <-
+ggplot(hd_wide) + 
+  geom_bar(aes(x=Q5.Demo.PrimaryAcademicField, fill=Q15.Demo.HighestDegree),
+           color="black") + 
+  coord_flip() +
+  scale_fill_brewer(palette="YlGnBu")  +
+  labs(title="Primary academic field and highest degree completed?",
+       x="Primary academic field",
+       y="Number of participants") +
+  facet_grid(.~Q15.Demo.HighestDegree) +
+  scale_y_continuous(minor_breaks=NULL) +
+  guides(fill="none") +
+  theme_bw(base_size = 18) +
+  #theme_bw() +
+  theme(plot.title = element_text(hjust = 0))
+
+fielddegree_faceted
+
+ggsave("fielddegree_faceted.png", fielddegree_faceted, width = 10, height = 5.5)
+
+```
+
+## Network consumer vs. network producer
+
+**Questions:**
+
+3. How much experience do you have as a **consumer** (e.g., reader, follower) of network science research?
+
+4. How much experience do you have as a **producer** (e.g., writer, publisher) of network science research?
+
+```{r 'consprod',fig.width=6.5}
+
+# Create a factor to force a natural ordering of the responses
+
+freq4 <- c("None","A little", "Some", "A lot")
+
+xp <- filter(demo_cols_tall, (question == "Q1.Demo.NetworkConsumerExperience" | question == "Q21.Demo.NetworkProducerExperience"))
+
+#xp_wide <- spread(xp, question, answer)
+
+xp$answer <- factor(xp$answer,
+                    levels=freq4,
+                    ordered = TRUE)
+
+xp$question <- factor(xp$question,
+                      labels=c("Consumer","Producer"),
+                      ordered = TRUE)
+
+exp_plot <- ggplot(xp) + 
+  geom_bar(aes(x=answer),fill="purple4") + 
+  facet_grid(.~question) +
+  labs(title="A. Experience as consumer and producer of network science research?",
+       x="",
+       y="Number of participants") +
+  scale_y_continuous(limits=c(0,40),breaks=c(0,10,20,30,40),minor_breaks=NULL) + 
+  scale_x_discrete(drop=FALSE) +
+  theme_bw(base_size = 18) +
+  #theme_bw() +
+  theme(plot.title = element_text(hjust = 0#, size=22
+                                  ),
+        panel.grid.major.x = element_blank(),
+        panel.grid.major.y = element_line(size=.1, color="grey")
+        )
+
+exp_plot
+
+```
+
+```{r}
+
+
+nrow(xp[xp$question == "Consumer" & xp$answer == "A lot",])
+
+nrow(xp[xp$question == "Producer" & (xp$answer == "A lot" | xp$answer == "Some"),])
+
+```
+
+## Network analysis vs. network visualization
+
+**Questions:**
+
+5. *How well does the following statement describe you?*
+
+     My research addresses network **analysis** (e.g., computational structural analysis, centrality measures of real-world networks, diffusion across networks, etc.).
+
+6. *How well does the following statement describe you?*
+
+     My research addresses network **visualization** (e.g., layout algorithm development, user testing, exploratory network visualizations, etc.).
+
+```{r 'analvis', fig.width=6.5}
+
+# Create a factor to force a natural ordering of the responses
+
+agree4 <- c("Not well at all","Not very well", "Somewhat well", "Very well")
+
+av <- filter(demo_cols_tall, (question == "Q3.Demo.NetworkAnalysisResearch" | question == "Q4.Demo.NetworkVisualizationResearch"))
+
+av$answer <- factor(av$answer,
+                    levels=agree4,
+                    labels=c("Not well\nat all","Not very\nwell", "Somewhat\nwell", "Very well"),
+                    ordered = TRUE)
+
+av$question <- factor(av$question,
+                      labels=c("Analysis","Visualization"),
+                      ordered=TRUE)
+  
+aplot <- 
+  ggplot(av) + 
+  geom_bar(aes(x=answer),fill="purple4") + 
+  facet_grid(.~question) +
+  labs(title="B. Research addresses network analysis and visualization?",
+       x="",
+       y="Number of participants") +
+  scale_y_continuous(limits=c(0,40),breaks=c(0,10,20,30,40),minor_breaks=NULL) + 
+  scale_x_discrete(drop=FALSE) +
+  theme_bw(base_size = 18) +
+  #theme_bw() +
+  theme(plot.title = element_text(hjust = 0#, size=22
+                                  ),
+        panel.grid.major.x = element_blank(),
+        panel.grid.major.y = element_line(size=.1, color="grey")
+        )
+
+aplot
+
+
+
+```
+
+
+```{r}
+
+#table(av$answer)
+
+#nrow(av[av$answer == "Not very well" ,])
+
+nrow(av[av$question == "Visualization" & (av$answer == "Very well" | av$answer == "Somewhat\nwell"),])
+
+```
+
+
+```{r}
+
+# Start with non-other data, which is in tall format and has been split into grouping categories.  
+
+# Recode answers to be more human readable.
+
+DF_split_rest$answer[DF_split_rest$answer == -99 | DF_split_rest$answer == "" ] <- "Skipped"
+DF_split_rest$answer[DF_split_rest$unfam == "Unfamiliar" & DF_split_rest$answer == "Skipped"] <- "SkipUnfam"
+
+# Sort in a way that puts the unfamiliar and radio button answers for the same user/group/subgroup/name combo next to each other; probably unnecessary for the following method of compilation
+
+DF_split_rest <- arrange(DF_split_rest, V1.Demo.ResponseID, group, subgroup, name, unfam)
+
+# combine the two rows for every user/group/subgroup/name column so that Unfamiliar carries through if it is checked; note, have lost all demo columns, so probably could have excluded them earlier anyway
+
+answers_by_user <- DF_split_rest %>%
+  group_by(V1.Demo.ResponseID, group, subgroup, name) %>%
+  summarise(compiled_answer=if("Unfamiliar" %in% answer) 
+                "Unfamiliar"else 
+                  paste(setdiff(answer,c("SkipUnfam")),
+                        collapse=",")) %>% 
+  collect
+
+
+```
+
+
+## Tools for network analysis and visualization
+
+**Questions:**
+
+10. For projects involving network data, how often do you produce some kind of network **visualization**?
+
+     *If answer is "Never" or if question was skipped, participants do not complete question 11 or 12.*
+     
+
+```{r 'prodvis', fig.width=6.5}
+
+# Start with Question 10.
+
+freq5 <- c("Skipped","Never","Rarely", "Sometimes", "Most of the time", "Always")
+
+pv <- filter(demo_cols_tall, (question == "Q11.Demo.HowOftenProduceVis"))
+
+pv$answer <- factor(pv$answer,
+                    levels=freq5,
+                    ordered = TRUE)
+
+prod_vis <- ggplot(pv) + 
+  geom_bar(aes(x=answer),fill="purple4") + 
+  labs(title="C. How often do you produce a visualization?",
+       x="",
+       y="Number of participants") +
+  scale_y_continuous(limits=c(0,40),breaks=c(0,10,20,30,40),minor_breaks=NULL) + 
+  scale_x_discrete(drop=FALSE) +
+  theme_bw(base_size = 18) +
+  #theme_bw() +
+  theme(plot.title = element_text(hjust = 0#, size=22
+                                  ),
+        panel.grid.major.x = element_blank(),
+        panel.grid.major.y = element_line(size=.1, color="grey")
+        )
+
+prod_vis
+```
+
+```{r 'demogrid', fig.width=6.5, fig.height=7}
+
+grid.arrange(exp_plot, aplot, prod_vis, nrow=3)
+
+multi_panel <- arrangeGrob(exp_plot, aplot, prod_vis, nrow=3)
+
+ggsave("exp_plot.png", multi_panel, width = 11.5, height = 10)
+
+```
+
+**Questions:**
+
+7. When you are doing network **analysis**, how frequently do you use each of the following tools?
+
+     + Cytoscape
+     + NetworkX
+     + D3
+     + SoNIA
+     + VOSviewer
+     + SigmaJS
+     + SAS
+     + NodeXL
+     + Gephi
+     + GUESS
+     + UCINET
+     + Network Workbench
+     + ORA
+     + R
+     + Sci2
+     + Pajek
+     + Graphviz
+     + Tulip
+     + Other
+
+11. When you are doing network **visualization**, how frequently do you use each of the following tools?
+
+     *same response options as question 7 above*
+
+```{r 'toolfreq', fig.width=6.5}
+
+# Limit subgroup to the questions of interest -- column names that included either "Analysis" or "Vis," which are only present for "Tool" questions
+
+measures_by_user_atool <- filter(answers_by_user, (subgroup=="Analysis" | subgroup=="Vis"))
+
+# create a column that indicates if the answer should count as "negative" - anything other than the two highest frequency levels
+
+measures_by_user_atool$neg <- ifelse((measures_by_user_atool$compiled_answer == "Often" | measures_by_user_atool$compiled_answer == "Almost always/always"), 0, 1)
+
+measures_by_user_atool$non_grey <- ifelse((measures_by_user_atool$compiled_answer == "Skipped" | measures_by_user_atool$compiled_answer == "Unfamiliar"), 0, 1)
+
+measures_by_user_atool$name <- factor(measures_by_user_atool$name, levels=names(sort(table(measures_by_user_atool$name[measures_by_user_atool$non_grey == 1]))))
+
+measures_by_user_atool$compiled_answer <- factor(measures_by_user_atool$compiled_answer,
+                                               levels=c("Skipped",
+                                                        "Unfamiliar",
+                                                        "Never/almost never",
+                                                        "Seldom/rarely",
+                                                        "Often",
+                                                        "Almost always/always"
+                                                        ),
+                                               ordered=TRUE)
+
+measures_by_user_atool$subgroup <- factor(measures_by_user_atool$subgroup,
+                                          labels=c("Analysis","Visualization"),
+                                          ordered=TRUE)
+
+atool_plot <- ggplot(measures_by_user_atool) + 
+  geom_bar(aes(x=name, fill=compiled_answer), position = position_stack(reverse = TRUE)) + 
+  facet_grid(.~subgroup) +
+  coord_flip() +
+  scale_fill_manual(values=c("snow4","snow3","tan3","tan1","turquoise2","turquoise4"),
+                    name="")  +
+  labs(title="How frequently do you use these tools for analysis and visualization?",
+       x="Network tools",
+       y="Number of participants") +
+  theme_bw(base_size = 18) +
+  theme(legend.position="bottom", 
+        panel.grid.major.y = element_blank(),
+        panel.grid.major.x = element_blank(),
+        plot.title = element_text(hjust = 0)) +
+  guides(fill=guide_legend(nrow=1,byrow=TRUE))
+
+atool_plot
+
+#ggsave("tools_stacked.png", width=12,height=5.25)
+
+```
+
+### Processing the "Other" data
+
+```{r}
+
+# Start cleaning the other data.  
+
+# Fill in Unfamiliar, which was milling in some Other rows that should have had that option
+
+DF_split_other$unfam[DF_split_other$qnum == "Q9" & DF_split_other$variant == "1_17_TEXT"] <- "Unfamiliar"
+
+DF_split_other$unfam[DF_split_other$qnum == "Q14" & DF_split_other$variant == "1_18_TEXT"] <- "Unfamiliar"
+
+DF_split_other$unfam[DF_split_other$qnum == "Q6" & DF_split_other$variant == "1_18_TEXT"] <- "Unfamiliar"
+
+DF_split_other$unfam[DF_split_other$qnum == "Q22" & DF_split_other$variant == "1_18_TEXT"] <- "Unfamiliar"
+
+DF_split_other$unfam[DF_split_other$qnum == "Q16" & DF_split_other$variant == "1_18_1"] <- "Unfamiliar"
+
+# create a new column to indicate the rows that have free text answers
+
+substrRight <- function(x, n){
+  substr(x, nchar(x)-n+1, nchar(x))
+}
+
+DF_split_other$text[substrRight(DF_split_other$variant,4) == "TEXT"] <- "TEXT"
+
+# create a new column that stores the "variant", which is what will group the name of the free text measure with the ratings of that measure
+
+DF_split_other$var_trunc <- substr(DF_split_other$variant,1,4)
+
+# various scales used for ratings
+
+often4 <- c("Almost always/always","Never/almost never","Often","Seldom/rarely")
+likely4 <- c("Very likely","Somewhat likely","Somewhat unlikely","Very unlikely")
+import4 <- c("Very unimportant","Somewhat unimportant","Somewhat important","Very important")
+unfam2 <- c("-99","Unfamiliar")
+
+# first, compress 4 rows (unfamiliar check box, unfamiliar text box, likely/important radio button, likely/important text box) into two (one for the unfamiliar rows, one for the radio button rows).  each row pulls the name of the measure typed into the text box, then sets the answer to whatever answer matches the pre-defined answers. 
+
+DF_other_2 <- DF_split_other %>%
+  group_by(V1.Demo.ResponseID,group,subgroup,var_trunc, unfam) %>%
+  summarise(prelim_name = paste(setdiff(answer,c(unfam2,often4,likely4,import4)), collapse=","),
+            prelim_answer = paste(intersect(answer,c(unfam2,often4,likely4,import4)), collapse=","))
+
+DF_other_2$prelim_name[DF_other_2$prelim_name == ""] <- NA
+DF_other_2$prelim_name[DF_other_2$prelim_name == "NA"] <- NA
+
+# change codes to more human-readable answers
+
+DF_other_2$prelim_answer[DF_other_2$prelim_answer == -99] <- "Skipped"
+DF_other_2$prelim_answer[DF_other_2$unfam == "Unfamiliar" & DF_other_2$prelim_answer == "Skipped"] <- "SkipUnfam"
+
+# in the final compress, carry unfamiliar through if selected, drop it if skipped 
+
+DF_other_3 <- DF_other_2 %>%
+  group_by(V1.Demo.ResponseID, group, subgroup, prelim_name) %>%
+  summarise(compiled_answer=
+              if("Unfamiliar" %in% prelim_answer) 
+                "Unfamiliar"else
+                  paste(setdiff(prelim_answer,c("SkipUnfam")),
+                        collapse=",")) %>% 
+  collect
+```
+
+### Reconciling Importance and Estimability Others
+
+```{r}
+
+# In the survey, anything typed into the "Other" field from the Importance questions got pulled into the other field for the Estimability questions automatically.  This will replicate that.
+
+# subset Other data to Importance questions, then sort by ID
+
+other_meas_imp <- arrange(DF_other_3[DF_other_3$subgroup == "Important",],V1.Demo.ResponseID)
+
+# sort entire table by ID
+
+DF_other_3 <- arrange(DF_other_3,V1.Demo.ResponseID)
+
+# test that IDs match up; creating new column in data frame, which throws a warning?
+
+DF_other_3$ID_from_import[DF_other_3$subgroup == "Estimable"] <- other_meas_imp$V1.Demo.ResponseID
+
+# pull in measure name from Importance questions
+
+DF_other_3$name_from_import[DF_other_3$subgroup == "Estimable"] <- other_meas_imp$prelim_name
+
+# replace measure name for Estimable questions, assuming the IDS match
+
+DF_other_3$prelim_name <- ifelse((DF_other_3$subgroup == "Estimable"), ifelse(DF_other_3$V1.Demo.ResponseID == DF_other_3$ID_from_import, DF_other_3$name_from_import, "Unknown"), DF_other_3$prelim_name)
+
+```
+
+### Summarizing the "Other" responses
+
+```{r, fig.width=6.5}
+
+# Select the "Other" responses for Analysis and Vis Tools
+
+atool_other <- filter(DF_other_3,(subgroup=="Analysis" | subgroup=="Vis"))
+
+atool_other$prelim_name <- tolower(atool_other$prelim_name)
+
+atool_other$prelim_name <- factor(atool_other$prelim_name,
+                             levels=names(sort(table(atool_other$prelim_name))),
+                             ordered=TRUE)
+
+atool_other$subgroup <- factor(atool_other$subgroup,
+                               labels=c("Analysis","Visualization"),
+                               ordered=TRUE)
+
+atool_other_plot <- ggplot(filter(atool_other,prelim_name != "other (blank)")) +
+  geom_bar(aes(x=prelim_name),fill="purple4") +
+  facet_grid(.~subgroup) +
+  coord_flip() +
+  labs(title="Generalized tools like SPSS, Stata, and Matlab\nare mentioned regularly in the 'Other' field.",
+       x="Other network tools",
+       y="Number of participants") +
+  scale_y_continuous(minor_breaks=NULL) + 
+  #scale_x_discrete(drop=FALSE) +
+  theme_bw(base_size = 18) +
+  theme(panel.grid.major.y = element_blank(),
+        panel.grid.major.x = element_line(size=.1, color="grey"),
+        plot.title = element_text(hjust = 0, size=22)
+        )
+
+atool_other_plot
+
+```
+
+## Network measures by importance and estimability
+
+**Questions:**
+
+8. How important are these network measures and calculations to your research?
+
+     + Average degree or degree distribution
+     + Number of links
+     + Number of nodes
+     + Number of unconnected components
+     + Component size distribution
+     + Average path length
+     + Average shortest path/shortest path distribution
+     + Diameter (longest path length)
+     + Link density (# current links/#possible links)
+     + Clustering coefficient
+     + Modularity/community/cluster detection
+     + Node degree (including in-degree and out-degree)
+     + Node betweenness centrality
+     + Closeness centrality
+     + Eigenvector centrality
+     + Link betweenness centrality
+     + Presence of cycles/loops
+     + Other
+
+9. Consider the sample network visualizations below.
+
+     + For network visualizations like these, how likely is it that you would be able to **estimate** the following network measures and calculations from a visualization of the network?
+     + For network visualizations like these, how likely is it that you would be able to estimate the relative value of the following **node properties** from a visualization of the network (rather than the exact values for each node)?
+     + For network visualizations like these, how likely is it that you would be able to estimate the relative value of the following **link properties** from a visualization of the network (rather than the exact values for each link)?
+     
+    *same response options as question 8 above*
+
+
+```{r ''measures-stacked, fig.width=6.5}
+
+# Limit the columns to the questions of interest -- subgroups "Important" and "Estimable".
+
+measures_by_user_imp <- filter(answers_by_user, (subgroup=="Important" | subgroup=="Estimable"))
+
+# normalize the answer text across both questions so the chart will be easier to interpret. 
+
+measures_by_user_imp$compiled_answer <- ifelse((measures_by_user_imp$compiled_answer == "Very unlikely" | measures_by_user_imp$compiled_answer == "Very unimportant"), "Very low", ifelse((measures_by_user_imp$compiled_answer == "Somewhat unlikely" | measures_by_user_imp$compiled_answer == "Somewhat unimportant"), "Somewhat low", ifelse((measures_by_user_imp$compiled_answer == "Somewhat likely" | measures_by_user_imp$compiled_answer == "Somewhat important"), "Somewhat high", ifelse((measures_by_user_imp$compiled_answer == "Very likely" | measures_by_user_imp$compiled_answer == "Very important"), "Very high", measures_by_user_imp$compiled_answer))))
+
+# Keep track of whether the answer counts as negative
+
+measures_by_user_imp$neg <- ifelse((measures_by_user_imp$compiled_answer == "Somewhat high" | measures_by_user_imp$compiled_answer == "Very high"), 0, 1)
+
+# Sort the measures in order of total number of negative answers
+
+#measures_by_user_imp$name <- factor(measures_by_user_imp$name, levels=names(sort(table(measures_by_user_imp$name[measures_by_user_imp$neg == 1]),decreasing=TRUE)))
+
+# Sort the measures in order of total number of negative answers for importance
+
+measures_by_user_imp$name <- factor(measures_by_user_imp$name, levels=names(sort(table(measures_by_user_imp$name[measures_by_user_imp$neg == 1 & measures_by_user_imp$subgroup == "Important"]),decreasing=TRUE)))
+
+# Sort the subgroups so that Importance is first
+
+measures_by_user_imp$subgroup <- factor(measures_by_user_imp$subgroup,
+                                        levels=c("Important","Estimable"),
+                                        ordered=TRUE)
+
+# Put answers in order of overall positivity
+
+measures_by_user_imp$compiled_answer <- factor(measures_by_user_imp$compiled_answer,
+                                               levels=c("Skipped",
+                                                        "Unfamiliar",
+                                                        "Very low",
+                                                        "Somewhat low",
+                                                        "Somewhat high",
+                                                        "Very high"
+                                                        ),
+                                               ordered=TRUE)
+
+# Create stacked bar graph
+
+ggplot(measures_by_user_imp) + 
+  geom_bar(aes(x=name, fill=compiled_answer), position = position_stack(reverse = TRUE)) + 
+  facet_grid(.~subgroup) +
+  coord_flip() +
+  scale_fill_manual(values=c("snow4","snow3","sienna3","sienna1","skyblue2","skyblue4"),
+                    name="")  +
+  labs(title="Partipicants rated simpler metrics at the\nnode and graph level most important.",
+       x="Network measure",
+       y="Number of participants") +
+  theme_bw(base_size = 18) +
+  theme(legend.position="bottom", 
+        panel.grid.major.y = element_blank(),
+        panel.grid.major.x = element_blank(),
+        plot.title = element_text(hjust = 0)) +
+  guides(fill=guide_legend(nrow=1,byrow=TRUE))
+
+
+```
+
+```{r}
+
+# Number of positives on Importance for NodeDegree
+
+nrow(measures_by_user_imp[measures_by_user_imp$subgroup == "Important" & measures_by_user_imp$name == "NodeDegree" & (measures_by_user_imp$compiled_answer == "Somewhat high" | measures_by_user_imp$compiled_answer == "Very high"),1])
+
+```
+
+```{r}
+
+# Number of positives on Estimability for NumComponents
+
+nrow(measures_by_user_imp[measures_by_user_imp$subgroup == "Estimable" & measures_by_user_imp$name == "NumComponents" & (measures_by_user_imp$compiled_answer == "Somewhat high" | measures_by_user_imp$compiled_answer == "Very high"),1])
+
+```
+
+Further analysis of demographic columns
+
+```{r}
+
+demo_for_analysis <- demo_cols[,c(1,5,6,8:15)]
+
+fields <- names(table(demo_for_analysis$Q5.Demo.PrimaryAcademicField))
+
+for (i in 1:length(fields)) {
+  #print(i)
+  #print(fields[i])
+  demo_for_analysis$primfield[demo_for_analysis$Q5.Demo.PrimaryAcademicField == fields[i]] <- i
+}
+
+demo_for_analysis$primfield <- factor(demo_for_analysis$primfield, labels=fields)
+
+
+Humanities <- c("Anthropology", "Arts", "Classics", "History", "Languages", "Literature", "Philosophy", "Religion")
+
+SocialSciences <- c("Archaeology", "Communication studies", "Cultural and ethnic studies", "Economics", "Geography", "History", "Information science", "Linguistics", "Political science", "Psychology", "Sociology")
+
+LifeSciences <- c("Biology", "Chemistry", "Earth sciences", "Physics", "Space sciences")
+
+FormalSciences <- c("Mathematics", "Computer sciences", "Logic", "Statistics", "Systems science")
+
+Professional <- c("Architecture and design", "Business", "Divinity", "Education", "Engineering", "Human physical performance and recreation", "Journalism, media studies and communication", "Law", "Library and museum studies", "Medicine", "Military sciences", "Public administration")
+
+Other <- c("Other")
+
+
+demo_for_analysis$has_phd <- ifelse(demo_for_analysis$Q15.Demo.HighestDegree == "Doctorate degree",1,0)
+
+demo_for_analysis$has_phd <- factor(demo_for_analysis$has_phd, labels=c("no Doctorate","Doctorate"))
+
+degrees <- names(table(demo_for_analysis$Q15.Demo.HighestDegree))
+
+for (i in 1:length(degrees)) {
+  #print(i)
+  #print(degrees[i])
+  demo_for_analysis$highdegree[demo_for_analysis$Q15.Demo.HighestDegree == degrees[i]] <- i
+}
+
+demo_for_analysis$highdegree <- factor(demo_for_analysis$highdegree,
+                                       levels=c(1,5,3,2,4),
+                                       labels=c("Bachelor's degree",
+                                             "Professional degree", 
+                                             "Master's degree",
+                                             "Doctorate degree", 
+                                             "Other"),
+                                       ordered = TRUE)
+```
+
+Try looking at answer distributions based on certain demographic variables.
+
+```{r 'measures-stacked2', fig.width=6.5}
+
+# Join adjusted demographic columns back to answer data.
+
+measures_by_user_demo <- left_join(measures_by_user_imp,demo_for_analysis)
+
+# sort by negative, based on Importance
+
+measures_by_user_demo$name <- factor(measures_by_user_demo$name, levels=names(sort(table(measures_by_user_demo$name[measures_by_user_demo$neg == 1 & measures_by_user_demo$subgroup == "Important"]),decreasing=TRUE)))
+
+# stacked bar, normal
+
+measure_stacked <- 
+ggplot(measures_by_user_demo) + 
+  geom_bar(aes(x=name, fill=compiled_answer), position = position_stack(reverse = TRUE)) + 
+  facet_grid(.~subgroup) +
+  coord_flip() +
+#  scale_fill_manual(values=c("snow4","snow3","sienna3","sienna1","skyblue2","skyblue4"),
+#                    name="")  +
+  scale_fill_manual(values=c("gray58","gray71","#e66101","#fdb863","#b2abd2","#5e3c99"),
+                    name="") +
+  labs(title="How important are these measures to your research?\nHow likely is it that you would be able to estimate these measures from a visualization?",
+       x="Network measure",
+       y="Number of participants") +
+  theme_bw(base_size = 16) +
+  #theme_bw() +
+  theme(legend.position="bottom", 
+        panel.grid.major.y = element_blank(),
+        panel.grid.major.x = element_blank(),
+        plot.title = element_text(hjust = 0)) +
+  guides(fill=guide_legend(nrow=1,byrow=TRUE))
+
+ggsave("measure_stacked.png", measure_stacked, width=13, height=9)
+```
+
+```{r, fig.width=6.5}
+
+#stacked bar, with an extra subdivision (has_phd)
+
+#obnoxiously, normal bar charts go bottom to top, while facets go top to bottom.  Factoring the "name" variable the right way for the bar chart above messes up the facets below, and I'm not seeing an easy way to reverse the order of the facets to make it match the bar chart.  Will ignore for now, since it's not a crucial plot.
+
+ggplot(measures_by_user_demo) + 
+  geom_bar(aes(x=has_phd, fill=compiled_answer),position=position_fill(reverse=TRUE)) + 
+  facet_grid(name~subgroup) +
+  coord_flip() +
+  scale_fill_manual(values=c("snow4","snow3","sienna3","sienna1","skyblue2","skyblue4"),
+                    name="")  +
+  labs(title="How important are these measures to your research?\nHow likely is it that you would be able to estimate these measures from a visualization?",
+       x="Network measure",
+       y="Percentage of participants") +
+  theme_bw() +
+  theme(legend.position="bottom", 
+        panel.grid.major.y = element_blank(),
+        panel.grid.major.x = element_blank(),
+        plot.title = element_text(hjust = 0, size=22)) +
+  guides(fill=guide_legend(nrow=1,byrow=TRUE))
+
+```
+
+
+## Comparing network measures based on total positivity vs. total negativity.
+
+First, calculate for every user/measure combination whether the user rated both as positive, both as negative, or mixed (or if they skipped/were unfamiliar).
+
+```{r}
+
+# remove extra columns
+
+measures_by_user_sel <- measures_by_user_imp[,-c(2,6)]
+
+# Recode answer as positive, negative, skipped, or unfamiliar
+
+measures_by_user_sel$compiled_answer <- 
+  ifelse((measures_by_user_sel$compiled_answer=="Very high" | measures_by_user_sel$compiled_answer=="Somewhat high"), "positive", 
+         ifelse((measures_by_user_sel$compiled_answer=="Very low" | measures_by_user_sel$compiled_answer=="Somewhat low"), "negative", ifelse(measures_by_user_sel$compiled_answer=="Unfamiliar","Unfamiliar",ifelse(measures_by_user_sel$compiled_answer=="Skipped","Skipped","Unfound"))))
+
+# convert data from tall back to wide, so Importance and Estimability are in separate columns. Necessary for the scatterplot.
+
+est_vs_imp <- spread(measures_by_user_sel, subgroup, compiled_answer)
+
+# calculate if the user rated the measure positively on both importance and estimability. If they skipped or check unfamiliar on either, both_pos gets coded as a -99.
+
+est_vs_imp$both_pos <- ifelse((est_vs_imp$Important == est_vs_imp$Estimable & est_vs_imp$Important == "positive"),1,ifelse((est_vs_imp$Important == "Skipped" | est_vs_imp$Important == "Unfamiliar" | est_vs_imp$Estimable == "Skipped" | est_vs_imp$Estimable == "Unfamiliar"),-99,0))
+
+# both_neg follows the convention of both_pos.
+
+est_vs_imp$both_neg <- ifelse((est_vs_imp$Important == est_vs_imp$Estimable & est_vs_imp$Important == "negative"),1,ifelse((est_vs_imp$Important == "Skipped" | est_vs_imp$Important == "Unfamiliar" | est_vs_imp$Estimable == "Skipped" | est_vs_imp$Estimable == "Unfamiliar"),-99,0))
+
+# mixed gets a 1 if both_pos and both_neg are both 0. -99s carry through.
+
+est_vs_imp$mixed <- ifelse((est_vs_imp$both_pos == 0 & est_vs_imp$both_neg == 0),1,ifelse((est_vs_imp$Important == "Skipped" | est_vs_imp$Important == "Unfamiliar" | est_vs_imp$Estimable == "Skipped" | est_vs_imp$Estimable == "Unfamiliar"),-99,0))
+
+```
+
+Now that we have both_pos, etc. for each user, we can aggregate again to get totals for each measure.
+
+```{r}
+
+# Filter out users who skipped most or all of the Estimability questions. (no longer necessary)
+
+est_vs_imp_completed <- filter(est_vs_imp, !(V1.Demo.ResponseID %in% omit_users$V1.Demo.ResponseID))
+
+# When grouping by measure, remove a user-measure combination if a user is unfamiliar with or skipped that measure.  Finally, collapse all users by creating totals for the both_pos, both_neg, and mixed columns, then add a new column that stores how many users were left after the filtering.
+
+measures <- est_vs_imp_completed %>% filter(both_pos >= 0 & both_neg >= 0) %>% group_by(name) %>% summarise(total_pos=sum(both_pos),total_neg=sum(both_neg),total_mixed=sum(mixed),num_responses=n()) %>% collect
+
+# Add a "level" column that hard codes in what level of analysis the measure represent - element level, cluster level, or graph level.
+
+measures$level <- ifelse(measures$name %in% c("EigenvectorCentrality","ClosenessCentrality","NodeBC","NodeDegree","Loops","LinkBC"),"Element",ifelse(measures$name %in% c("AvgShortestPath","AvgPathLength","Diameter","ClusteringCoeff","Density","NumLinks","AvgDegree","NumNodes"),"Graph",ifelse(measures$name %in% c("Modularity","ComponentSize","NumComponents"),"Cluster","Other")))
+
+# Change level to an ordered factor, so visualizations will turn out nicer.
+
+measures$level <- factor(measures$level,levels=c("Element","Cluster","Graph"),ordered=TRUE)
+```
+
+Finally, we can graph the results by creating a scatterplot where each measure is a dot, the x axis is the number of people who rated the measure positively on both importance and estimability, and the y axis is the number of people who rated the measure negatively on both importance and estimability.
+
+```{r 'scatter-with-size', fig.width=6.5,fig.height=6}
+
+max_size <- 9
+
+upper.range <- max(measures$num_responses)
+lower.range <- min(measures$num_responses)
+
+min_size <- lower.range/upper.range*max_size
+
+scatter <- ggplot(measures) + 
+            geom_point(aes(x=total_pos,y=total_neg,fill=level,size=num_responses),color="black",alpha=.8,pch=21) +
+            scale_size_continuous(range=c(min_size,max_size),name="Number of\nresponses",breaks=c(lower.range,mean(c(upper.range,lower.range)),upper.range),guide=guide_legend(override.aes = 
+                                                   list(shape=19))) +
+            scale_fill_manual(name="Entity of\ninterest",
+                              values=c("#fee391","#fe9929", "#cc4c02"),
+                              guide=guide_legend(override.aes = 
+                                                   list(shape=22, 
+                                                        size = 8))) +
+            coord_cartesian(xlim=c(0,35),ylim=c(0,35)) +
+            geom_text(aes(x=total_pos,y=total_neg,label = name),nudge_y=runif(17,0.25,1.5),size=5) +
+            geom_abline(intercept=0,slope=1) +
+            labs(title="Comparing measures by positivity, negativity", x="Number of participants rating the measure\nhigh on both questions", y="Number of participants rating the measure\nlow on both questions") +
+            #guides(col = guide_legend(override.aes = list(shape = 15, size = 8))) +
+            theme_bw(base_size = 18) +
+  theme(plot.title = element_text(hjust = 0))
+
+scatter
+
+#ggsave("scatter.png", scatter, width=10, height=9)
+```
+
+```{r 'scatter-without-size', fig.width=6.5,fig.height=6}
+
+scatter <- ggplot(measures) + 
+            geom_point(aes(x=total_pos,y=total_neg,fill=level),color="black",alpha=.8,pch=21,size=9) +
+            scale_fill_manual(name="Entity of\ninterest",
+                              values=c("#fee391","#fe9929", "#cc4c02"),
+                              guide=guide_legend(override.aes = 
+                                                   list(shape=22, 
+                                                        size = 8))) +
+            coord_cartesian(xlim=c(0,35),ylim=c(0,35)) +
+            geom_text(aes(x=total_pos,y=total_neg,label = name),nudge_y=runif(17,0.25,1.25),size=5) +
+            geom_abline(intercept=0,slope=1) +
+            labs(title="Comparing measures by positivity, negativity", x="Number of participants rating the measure\nhigh on both questions", y="Number of participants rating the measure\nlow on both questions") +
+            #guides(col = guide_legend(override.aes = list(shape = 15, size = 8))) +
+            theme_bw(base_size = 18) +
+  theme(plot.title = element_text(hjust = 0))
+
+scatter
+
+ggsave("scatter.png", scatter, width=10, height=9)
+```
+
+Try to generate tool ranks?
+
+```{r}
+
+measures_rank <- est_vs_imp_completed %>% group_by(name) %>% summarise(imp_pos=sum(Important == "positive"),est_pos = sum(Estimable == "positive")) %>% collect
+
+measures_rank$imp_rank <- rank(-measures_rank$imp_pos, ties.method = "average")
+
+measures_rank$est_rank <- rank(-measures_rank$est_pos, ties.method = "average")
+
+measures_rank$avg_rank <- rowMeans(measures_rank[,4:5])
+
+measure_ranks <- gather(measures_rank[,c(1,4:6)], "subgroup", "rank", 2:3)
+
+```
+
+
+
+Displaying measures based on ranking of positivity (i.e., the total number of "somewhat high" and "very high" responses for each of the subgroups, or the blue values in previous plot)
+
+```{r, fig.width=10}
+
+measure_ranks$subgroup <- factor(measure_ranks$subgroup, levels=c("imp_rank","est_rank"), labels=c("Importance","Estimability"), ordered=TRUE)
+
+ggplot(data=measure_ranks, aes(x=subgroup,y=rank,group=name, color=(factor(avg_rank<10,levels=c(TRUE,FALSE),ordered=TRUE,labels=c("Yes","No"))))) +
+  geom_line(size=1) +
+  geom_text(data=measure_ranks[measure_ranks$subgroup=="Estimability",], aes(label=name, x=2.05), hjust=0, show.legend=FALSE) +
+  geom_text(data=measure_ranks[measure_ranks$subgroup=="Importance",], aes(label=name, x=0.95), hjust=1, show.legend=FALSE) +
+  scale_x_discrete(expand=c(0,0.3)) +
+  scale_y_reverse(breaks=c(1,17),minor_breaks=c(1:17)) +
+  #geom_hline(yintercept = 9, linetype="dashed", colour="#AAAAAA") +
+  #geom_text(aes(x=.95,y=8.5,label="rank=9", hjust = 1), colour="#AAAAAA") +
+  scale_color_manual(name="Top 9 measures\nby average\npositivity rank", values=c("purple4","#999999")) +
+  labs(title="Which measures rank highly on both Importance and Estimability?",x="question",y="positivity rank") +
+  #xlim(.5,2.5) +
+  theme_bw(base_size = 20) +
+  theme(plot.title = element_text(hjust = 0))
+
+#ggsave("rank_slope.png",width=13,height=6)
+#ggsave("rank_slope.pdf",width=13,height=6)
+
+best_with_full <- unique(measure_ranks[,1:2])
+
+names(best_with_full) <- c("measure_name","avg_rank_full")
+
+```
+
+```{r}
+
+clusters <- read.csv("final_assignments.csv", header=TRUE, stringsAsFactors=FALSE)
+```
+
+```{r}
+
+measures_by_user_clust <- merge(measures_by_user_demo,clusters)
+
+measures_by_user_clust <- dplyr::select(measures_by_user_clust, -c(group, neg, DO.Q.Q6.DisplayOrderAnalysisTools,DO.Q.Q22.DisplayOrderVisTools,DO.Q.Q9.DisplayOrderLayouts))
+```
+
+```{r, fig.width=10, fig.height=10}
+ggplot(measures_by_user_clust, aes(x=compiled_answer)) + 
+  geom_bar() +
+  facet_grid(cluster ~ .)
+
+```
+
+```{r, fig.width=10, fig.height=10}
+
+measures_by_user_clust$Q4.Demo.NetworkVisualizationResearch <- factor(measures_by_user_clust$Q4.Demo.NetworkVisualizationResearch,
+                    levels=agree4,
+                    labels=c("Not well\nat all","Not very\nwell", "Somewhat\nwell", "Very well"),
+                    ordered = TRUE)
+
+ggplot(measures_by_user_clust, aes(x=Q4.Demo.NetworkVisualizationResearch)) + 
+  geom_bar() +
+  facet_grid(cluster ~ .)
+
+```
+
+```{r, fig.width=10, fig.height=10}
+
+measures_by_user_clust$Q11.Demo.HowOftenProduceVis <- 
+  factor(measures_by_user_clust$Q11.Demo.HowOftenProduceVis,
+                    levels=freq5,
+                    ordered = TRUE)
+
+ggplot(measures_by_user_clust, aes(x=Q11.Demo.HowOftenProduceVis)) + 
+  geom_bar() +
+  facet_grid(cluster ~ .)
+
+```
+
+```{r}
+
+ggplot(measures_by_user_clust) + 
+  geom_mosaic(aes(x=product(Q11.Demo.HowOftenProduceVis,compiled_answer))) #+
+  #facet_grid(cluster~.)
+  
+```
+
+```{r}
+
+ggplot(measures_by_user_clust) + 
+  geom_mosaic(aes(x=product(compiled_answer, Q11.Demo.HowOftenProduceVis), 
+                  fill=compiled_answer)) +
+  #facet_grid(cluster~.) +
+  scale_fill_manual(values=c("snow4","snow3","sienna3","sienna1","skyblue2","skyblue4"),
+                    name="") +
+  guides(fill = guide_legend(reverse=T))
+
+  
+```
+
+```{r}
+
+ggplot(measures_by_user_clust) + 
+  geom_mosaic(aes(x=product(compiled_answer, Q11.Demo.HowOftenProduceVis), 
+                  fill=compiled_answer)) +
+  facet_grid(cluster~.) +
+  scale_fill_manual(values=c("snow4","snow3","sienna3","sienna1","skyblue2","skyblue4"),
+                    name="") +
+  guides(fill = guide_legend(reverse=T))
+
+  
+```
+
+```{r}
+active_with_clust <- merge(est_vs_imp_completed, clusters)
+
+clust1_rank <- active_with_clust[active_with_clust$cluster == 1,] %>% group_by(name) %>% summarise(imp_pos=sum(Important == "positive"),est_pos = sum(Estimable == "positive")) %>% collect
+
+clust1_rank$imp_rank <- rank(-clust1_rank$imp_pos, ties.method = "average")
+
+clust1_rank$est_rank <- rank(-clust1_rank$est_pos, ties.method = "average")
+
+clust1_rank$avg_rank <- rowMeans(clust1_rank[,4:5])
+
+best_with_clust1 <- clust1_rank[,c(1,6)]
+
+names(best_with_clust1) <- c("measure_name","avg_rank_clust1")
+
+
+
+clust2_rank <- active_with_clust[active_with_clust$cluster == 2,] %>% group_by(name) %>% summarise(imp_pos=sum(Important == "positive"),est_pos = sum(Estimable == "positive")) %>% collect
+
+clust2_rank$imp_rank <- rank(-clust2_rank$imp_pos, ties.method = "average")
+
+clust2_rank$est_rank <- rank(-clust2_rank$est_pos, ties.method = "average")
+
+clust2_rank$avg_rank <- rowMeans(clust2_rank[,4:5])
+
+best_with_clust2 <- clust2_rank[,c(1,6)]
+
+names(best_with_clust2) <- c("measure_name","avg_rank_clust2")
+
+
+
+
+clust3_rank <- active_with_clust[active_with_clust$cluster == 3,] %>% group_by(name) %>% summarise(imp_pos=sum(Important == "positive"),est_pos = sum(Estimable == "positive")) %>% collect
+
+clust3_rank$imp_rank <- rank(-clust3_rank$imp_pos, ties.method = "average")
+
+clust3_rank$est_rank <- rank(-clust3_rank$est_pos, ties.method = "average")
+
+clust3_rank$avg_rank <- rowMeans(clust3_rank[,4:5])
+
+best_with_clust3 <- clust3_rank[,c(1,6)]
+
+names(best_with_clust3) <- c("measure_name","avg_rank_clust3")
+
+
+
+clust4_rank <- active_with_clust[active_with_clust$cluster == 4,] %>% group_by(name) %>% summarise(imp_pos=sum(Important == "positive"),est_pos = sum(Estimable == "positive")) %>% collect
+
+clust4_rank$imp_rank <- rank(-clust4_rank$imp_pos, ties.method = "average")
+
+clust4_rank$est_rank <- rank(-clust4_rank$est_pos, ties.method = "average")
+
+clust4_rank$avg_rank <- rowMeans(clust4_rank[,4:5])
+
+best_with_clust4 <- clust4_rank[,c(1,6)]
+
+names(best_with_clust4) <- c("measure_name","avg_rank_clust4")
+
+
+all_bests <- full_join(best_with_full, best_with_clust1)
+
+all_bests <- full_join(all_bests, best_with_clust2)
+
+all_bests <- full_join(all_bests, best_with_clust3)
+
+all_bests <- full_join(all_bests, best_with_clust4)
+
+all_bests$cluster_votes <- rowSums(all_bests[,3:6] < 10)
+
+all_bests$cluster_mean <- rowMeans(all_bests[,3:6], na.rm=TRUE)
+
+#all_bests <- as.data.frame(all_bests)
+
+all_bests$level <- ifelse(all_bests$measure_name %in% c("EigenvectorCentrality","ClosenessCentrality","NodeBC","NodeDegree","Loops","LinkBC"),"Element",ifelse(all_bests$measure_name %in% c("AvgShortestPath","AvgPathLength","Diameter","ClusteringCoeff","Density","NumLinks","AvgDegree","NumNodes"),"Graph",ifelse(all_bests$measure_name %in% c("Modularity","ComponentSize","NumComponents"),"Cluster","Other")))
+
+# Factorize and order the level column.
+
+all_bests$level <- factor(all_bests$level,levels=c("Element","Cluster","Graph"),ordered=TRUE)
+
+#write.csv(all_bests, file = "measures_by_cluster.csv", row.names = FALSE)
+
+ggparcoord(data = all_bests[all_bests$cluster_mean < 10,], columns = c(3:6), groupColumn = "level", order = "anyClass", scale = "globalminmax") +
+  #geom_text(aes(label=labels(measure_name))) +
+  scale_y_reverse() +
+  scale_x_discrete(labels=c("1","3","2","4")) +
+  scale_color_discrete(name="Measure Level") +
+  labs(x="Cluster",y="Rank") +
+  theme_bw()
+
+# TO DO:
+
+# label parallel coords
+# use smart subsetting to test the ranking?  or just try again to get ranking working with random subsetting?
+# look for explanations for clusters
+
+```
+
+## Comparing measures based on average importance and estimability
+
+Idea - make a plot that shows each measure in four quadrants, where the axes are "importance" and "estimability".
+
+```{r}
+
+# Start over again with the tall dataset, before the first aggregation.  For this aggregation, group by user and measure again, but this time convert the Likert responses to numerical values -- 1 for Very unimportant, 4 for Very important, -99 for skipped.  Do for both importance and estimability.
+measures_by_user_quad <- measures_by_user_imp[,-c(2,6)]
+
+measures_by_user_quad$coded_answer <- ifelse(measures_by_user_quad$compiled_answer == "Unfamiliar", 0, ifelse(measures_by_user_quad$compiled_answer == "Skipped", -99, ifelse(measures_by_user_quad$compiled_answer == "Very low", 1, ifelse(measures_by_user_quad$compiled_answer == "Somewhat low", 2, ifelse(measures_by_user_quad$compiled_answer == "Somewhat high", 3, ifelse(measures_by_user_quad$compiled_answer == "Very high", 4, "Error"))))))
+                                             
+# Note: est_score and imp_score fairly highly correlated
+
+#cor(measures_by_user_quad$imp_score,measures_by_user_quad$est_score)
+#####   result: 0.7930693
+
+# Aggregate to the individual measures by averaging numerical Likert responses, filtering out measures marked as unfamiliar or measures that had been skipped.  Keep track of number of users responding for each measure.
+
+# output measures_by_user_quad for additional stats; necessary for logit?
+
+#write.csv(measures_by_user_quad, file = "measures_by_user_quad.csv")
+
+
+measures_quad <- measures_by_user_quad %>% filter(coded_answer > 0) %>% group_by(name, subgroup) %>% summarise(avg_score=mean(as.numeric(coded_answer))) %>% collect
+
+# Add the level of analysis for each measure.
+
+measures_quad$level <- ifelse(measures_quad$name %in% c("EigenvectorCentrality","ClosenessCentrality","NodeBC","NodeDegree","Loops","LinkBC"),"Element",ifelse(measures_quad$name %in% c("AvgShortestPath","AvgPathLength","Diameter","ClusteringCoeff","Density","NumLinks","AvgDegree","NumNodes"),"Graph",ifelse(measures_quad$name %in% c("Modularity","ComponentSize","NumComponents"),"Cluster","Other")))
+
+# Factorize and order the level column.
+
+measures_quad$level <- factor(measures_quad$level,levels=c("Element","Cluster","Graph"),ordered=TRUE)
+
+measures_quad_spread <- spread(measures_quad, subgroup, avg_score)
+```
+
+Finally, graph the results, using importance as the x axis and estimability as the y axis.
+
+```{r}
+scatter_quad <- ggplot(measures_quad_spread) + 
+            geom_point(aes(x=Important,y=Estimable,color=level),alpha=0.8,size=5) +
+            coord_cartesian(xlim=c(2,3.75),ylim=c(1.5,3.5)) +
+            geom_text(aes(x=Important,y=Estimable,label = name),nudge_y=-0.05,size=3) +
+            geom_vline(xintercept=mean(as.numeric(measures_quad_spread$Important))) +
+            geom_hline(yintercept=mean(as.numeric(measures_quad_spread$Estimable))) +
+            theme_bw()
+
+scatter_quad
+
+```
+
+Finally, analyze the "Other" responses for measures.
+
+```{r, fig.width=10}
+
+# Select the "Other" responses for Analysis and Vis Tools
+
+meas_other <- filter(DF_other_3,(subgroup=="Important" | subgroup=="Estimable"))
+
+meas_other$prelim_name <- tolower(meas_other$prelim_name)
+
+meas_other$prelim_name <- factor(meas_other$prelim_name,
+                             levels=names(sort(table(meas_other$prelim_name))),
+                             ordered=TRUE)
+
+meas_other$subgroup <- factor(meas_other$subgroup,
+                               levels=c("Important","Estimable"),
+                               ordered=TRUE)
+
+meas_other_plot <- ggplot(filter(meas_other,prelim_name != "other (blank)")) +
+  geom_bar(aes(x=prelim_name),fill="purple4") +
+  facet_grid(.~subgroup) +
+  coord_flip() +
+  labs(#title="Generalized tools like SPSS, Stata, and Matlab\nare mentioned regularly in the 'Other' field.",
+       x="Other measures",
+       y="Number of participants") +
+  scale_y_continuous(minor_breaks=NULL) + 
+  #scale_x_discrete(drop=FALSE) +
+  theme_bw() +
+  theme(panel.grid.major.y = element_blank(),
+        panel.grid.major.x = element_line(size=.1, color="grey"),
+        plot.title = element_text(hjust = 0, size=22)
+        )
+
+meas_other_plot
+
+
+meas_other$compiled_answer <- ifelse((meas_other$compiled_answer == "Very unlikely" | meas_other$compiled_answer == "Very unimportant"), "Very low", ifelse((meas_other$compiled_answer == "Somewhat unlikely" | meas_other$compiled_answer == "Somewhat unimportant"), "Somewhat low", ifelse((meas_other$compiled_answer == "Somewhat likely" | meas_other$compiled_answer == "Somewhat important"), "Somewhat high", ifelse((meas_other$compiled_answer == "Very likely" | meas_other$compiled_answer == "Very important"), "Very high", meas_other$compiled_answer))))
+
+meas_other$compiled_answer <- factor(meas_other$compiled_answer,
+                                               levels=c("Skipped",
+                                                        "Unfamiliar",
+                                                        "Very low",
+                                                        "Somewhat low",
+                                                        "Somewhat high",
+                                                        "Very high"),
+                                               ordered=TRUE)
+ggplot(filter(meas_other,prelim_name != "other (blank)")) + 
+  geom_bar(aes(x=prelim_name, fill=compiled_answer)) + 
+  facet_grid(.~subgroup) +
+  coord_flip() +
+  scale_fill_manual(values=c("Skipped" = "snow4", "Unfamiliar" = "snow3", "Very low" = "sienna3", "Somewhat low" = "sienna1", "Somewhat high" = "skyblue2", "Very high" = "skyblue4"),
+                    name="")  +
+  labs(#title="Partipicants rated simpler metrics at the\nnode and graph level most important.",
+       x="Network measure",
+       y="Number of participants") +
+  theme_bw() +
+  theme(legend.position="bottom", 
+        panel.grid.major.y = element_blank(),
+        panel.grid.major.x = element_blank(),
+        plot.title = element_text(hjust = 0, size=22)) +
+  guides(fill=guide_legend(nrow=1,byrow=TRUE))
+
+```
+
+## Layout algorithms
+
+**Question:**
+
+12. When you are doing network **visualization**, how frequently do use the following layout algorithms and techniques?
+
+```{r, fig.width=10}
+
+# use same process as tools, importance/estimability ratings; could maybe have done the compiled_answer factor just once on answers_by_user? also the neg column?
+
+measures_by_user_layout <- filter(answers_by_user, (group=="Layouts"))
+
+measures_by_user_layout$neg <- ifelse((measures_by_user_layout$compiled_answer == "Often" | measures_by_user_layout$compiled_answer == "Almost always/always"), 0, 1)
+
+measures_by_user_layout$name <- factor(measures_by_user_layout$name, levels=names(sort(table(measures_by_user_layout$name[measures_by_user_layout$neg == 1]),decreasing=TRUE)))
+
+measures_by_user_layout$compiled_answer <- factor(measures_by_user_layout$compiled_answer,
+                                               levels=c("Skipped",
+                                                        "Unfamiliar",
+                                                        "Never/almost never",
+                                                        "Seldom/rarely",
+                                                        "Often",
+                                                        "Almost always/always"
+                                                        ),
+                                               ordered=TRUE)
+
+ggplot(measures_by_user_layout) + 
+  geom_bar(aes(x=name, fill=compiled_answer),position = position_stack(reverse = TRUE)) + 
+  coord_flip() +
+  scale_fill_manual(values=c("snow4","snow3","tan3","tan1","turquoise2","turquoise4"),
+                    name="")  +
+  labs(#title="Layout title.",
+       x="",
+       y="Number of participants") +
+  theme_bw() +
+  theme(legend.position="bottom", 
+        panel.grid.major.y = element_blank(),
+        panel.grid.major.x = element_blank(),
+        plot.title = element_text(hjust = 0, size=22)) +
+  guides(fill=guide_legend(nrow=1,byrow=TRUE))
+
+```
+
+Also analyze the "Other" responses for layouts.
+
+```{r}
+
+layout_other <- filter(DF_other_3,(group=="Layouts"))
+
+layout_other$prelim_name <- tolower(layout_other$prelim_name)
+
+layout_other$prelim_name <- factor(layout_other$prelim_name,
+                             levels=names(sort(table(layout_other$prelim_name))),
+                             ordered=TRUE)
+
+ggplot(filter(layout_other,prelim_name != "other (blank)")) +
+  geom_bar(aes(x=prelim_name),fill="purple4") +
+  #coord_flip() +
+  labs(#title="Other layout title",
+       x="Other layout algorithms",
+       y="Number of participants") +
+  scale_y_continuous(minor_breaks=NULL, breaks=c(0,1)) + 
+  #scale_x_discrete(drop=FALSE) +
+  theme_bw() +
+  theme(panel.grid.major.x = element_blank(),
+        panel.grid.major.y = element_line(size=.1, color="grey"),
+        plot.title = element_text(hjust = 0, size=22)
+        )
+```
+
+## Dealing with ordering
+
+```{r}
+
+number_tools <- read.csv(textConnection("tool	subgroup	name
+1	Analysis	Pajek
+2	Analysis	UCINET
+3	Analysis	Gephi
+4	Analysis	Cytoscape
+5	Analysis	VOSviewer
+6	Analysis	R
+7	Analysis	NodeXL
+8	Analysis	NetworkX
+9	Analysis	Graphviz
+10	Analysis	Sci2
+11	Analysis	NetworkWorkbench
+12	Analysis	GUESS
+13	Analysis	SigmaJS
+14	Analysis	D3
+15	Analysis	SoNIA
+16	Analysis	ORA
+17	Analysis	Tulip
+18	Analysis	Other
+19	Analysis	SAS
+1	Visualization	Pajek
+2	Visualization	UCINET
+3	Visualization	Gephi
+4	Visualization	Cytoscape
+5	Visualization	VOSviewer
+6	Visualization	R
+7	Visualization	NodeXL
+8	Visualization	NetworkX
+9	Visualization	Graphviz
+10	Visualization	Sci2
+11	Visualization	NetworkWorkbench
+12	Visualization	GUESS
+13	Visualization	SigmaJS
+14	Visualization	D3
+15	Visualization	SoNIA
+16	Visualization	ORA
+17	Visualization	Tulip
+18	Visualization	Other
+19	Visualization	SAS"), sep="\t", stringsAsFactors=FALSE)
+
+number_layouts <- read.csv(textConnection("layout	group	name
+1	Layouts  Deterministic
+2	Layouts  ForceAtlas
+3	Layouts  ForceAtlas2
+4	Layouts  FruchtermanReingold
+5	Layouts  KamadaKawai
+6	Layouts  GEM
+7	Layouts  OpenOrd
+8	Layouts  VxOrd
+9	Layouts  LinLog
+10	Layouts  Spring
+11	Layouts  Circular
+12	Layouts  Circos
+13	Layouts  Matrix
+14	Layouts  Hive
+15	Layouts  Tube
+16	Layouts  Radial
+17	Layouts  Other"), sep="\t", stringsAsFactors=FALSE)
+
+order_atools <- demo_cols[,c(1,13)]
+
+order_atools_split <- separate(order_atools,DO.Q.Q6.DisplayOrderAnalysisTools,c("1","2","3","4","5","6","7","8","9","10","11","12","13","14","15","16","17","18","19"),sep="[|]")
+
+order_atools_tall <- gather(order_atools_split, "order", "tool", 2:20)
+
+order_atools_tall$order <- as.numeric(order_atools_tall$order)
+
+number_tools$tool <- as.character(number_tools$tool)
+
+order_atools_tall_join <- left_join(order_atools_tall, number_tools[number_tools$subgroup == "Analysis",])
+
+
+
+
+order_vtools <- demo_cols[,c(1,14)]
+
+order_vtools_split <- separate(order_vtools,DO.Q.Q22.DisplayOrderVisTools,c("1","2","3","4","5","6","7","8","9","10","11","12","13","14","15","16","17","18","19"),sep="[|]")
+
+order_vtools_tall <- gather(order_vtools_split, "order", "tool", 2:20)
+
+order_vtools_tall$order <- as.numeric(order_vtools_tall$order)
+
+order_vtools_tall_join <- left_join(order_vtools_tall, number_tools[number_tools$subgroup == "Visualization",])
+
+
+combined_tool_order <- bind_rows(order_atools_tall_join, order_vtools_tall_join)
+
+combined_tool_order <- combined_tool_order[combined_tool_order$name != "Other",]
+
+tools_with_order <- full_join(measures_by_user_atool, combined_tool_order[,c(1,2,4,5)])
+
+
+order_layouts <- demo_cols[,c(1,15)]
+
+order_layouts_split <- separate(order_layouts,DO.Q.Q9.DisplayOrderLayouts,c("1","2","3","4","5","6","7","8","9","10","11","12","13","14","15","16","17"),sep="[|]")
+
+order_layouts_tall <- gather(order_layouts_split, "order", "layout", 2:18)
+
+order_layouts_tall$order <- as.numeric(order_layouts_tall$order)
+
+number_layouts$layout <- as.character(number_layouts$layout)
+
+order_layouts_tall_join <- left_join(order_layouts_tall, number_layouts)
+
+order_layouts_tall_join <- order_layouts_tall_join[order_layouts_tall_join$name != "Other",]
+
+order_layouts_tall_join$group <- "Layouts"
+
+order_layouts_tall_join$name <- factor(order_layouts_tall_join$name, levels=levels(measures_by_user_layout$name), ordered=TRUE)
+
+layouts_with_order <- full_join(measures_by_user_layout, order_layouts_tall_join[,c(1,2,4,5)])
+
+
+# now run a chi2 test to compare compiled_answer to order for each of the subgroups?
+
+```
+
+
+```{r}
+
+layout_answers <- measures_by_user_layout[,c(1,4,5)]
+
+layout_answers$name <- paste("Layouts_",as.character(layout_answers$name),sep="")
+
+layout_spread <- spread(layout_answers, name, compiled_answer)
+
+tool_answers <- measures_by_user_atool[,c(1,3,4,5)]
+
+tool_answers$new_name <- paste(tool_answers$subgroup,tool_answers$name,sep="_")
+
+tool_spread <- spread(tool_answers[,c(1,4,5)], new_name, compiled_answer)
+
+measure_answers <- measures_by_user_imp[,c(1,3,4,5)]
+
+measure_answers$new_name <- paste(measure_answers$subgroup,measure_answers$name,sep="_")
+
+measure_spread <- spread(measure_answers[,c(1,4,5)], new_name, compiled_answer)
+
+pca_table <- full_join(demo_cols_subset, tool_spread)
+
+pca_table <- full_join(pca_table, measure_spread)
+
+pca_table <- full_join(pca_table, layout_spread)
+
+write.csv(pca_table, file = "pca_table.csv",row.names=FALSE)
+
+```

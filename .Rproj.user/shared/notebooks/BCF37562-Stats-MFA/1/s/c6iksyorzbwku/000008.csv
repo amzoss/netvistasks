@@ -1,0 +1,8 @@
+"0","ggplot(data_with_clusts) + "
+"0","  geom_point(aes(PC1,PC2,size=ActiveVLow,col=MFA.NA),alpha=.7) + "
+"0","  scale_color_discrete(name=""Cluster"") +"
+"0","  scale_size_continuous(name=""No. 'Very Low'\nanswers"") +"
+"0","  labs(#title=""Layout title."","
+"0","       x=""Dimension 1"","
+"0","       y=""Dimension 2"") +"
+"0","  theme_bw() "

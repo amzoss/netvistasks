@@ -1,0 +1,4 @@
+"0","DF.PCA.NA$TotalSkipped <- rowSums(is.na(DF.PCA.NA))"
+"0","DF.PCA.NA$ActiveSkipped <- rowSums(is.na(DF.PCA.NA[44:77]))"
+"0","# extra omit user ""R_djvhaRoxinvZmw1"""
+"0","DF.PCA.NA <- DF.PCA.NA[DF.PCA.NA$ActiveSkipped < 3,]"

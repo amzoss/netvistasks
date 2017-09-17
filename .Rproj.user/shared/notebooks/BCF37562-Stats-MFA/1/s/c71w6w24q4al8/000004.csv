@@ -1,0 +1,2 @@
+"0","# according to res.hcpc$desc.var, HowOftenProduceVis is one of the few demographic variables that correlates strongly with one or more of the clusters.  Try to compare plots of that variable and the cluster assignments?"
+"0","ggplot(data_with_clusts) + geom_point(aes(PC1,PC2,col=Q11.Demo.HowOftenProduceVis),size=5,alpha=.7) + theme_bw()"

@@ -1,0 +1,8 @@
+"0","scatter_quad <- ggplot(measures_quad_spread) + "
+"0","            geom_point(aes(x=Important,y=Estimable,color=level),alpha=0.8,size=5) +"
+"0","            coord_cartesian(xlim=c(2,3.75),ylim=c(1.5,3.5)) +"
+"0","            geom_text(aes(x=Important,y=Estimable,label = name),nudge_y=-0.05,size=3) +"
+"0","            geom_vline(xintercept=mean(as.numeric(measures_quad_spread$Important))) +"
+"0","            geom_hline(yintercept=mean(as.numeric(measures_quad_spread$Estimable))) +"
+"0","            theme_bw()"
+"0","scatter_quad"

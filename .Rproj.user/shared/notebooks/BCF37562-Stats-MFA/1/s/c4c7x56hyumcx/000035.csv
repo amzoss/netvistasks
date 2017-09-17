@@ -1,0 +1,2 @@
+"0","#clust.MFA.imputed <- HCPC(res.MFA.imputed)"
+"0","clust.MFA.imputed <- HCPC(res.MFA.imputed, nb.clust=4)"

@@ -1,0 +1,2 @@
+"0","#clust.MFA.Skipped.group2 <- HCPC(res.MFA.Skipped.group2)"
+"0","clust.MFA.Skipped.group2 <- HCPC(res.MFA.Skipped.group2, nb.clust=4)"

@@ -1,0 +1,3 @@
+"0","# impute and cluster just the active variables"
+"0","complete.MFA.active <- imputeMFA(DF.PCA.NA[,c(44:77)], group=c(17,17), type=(rep(""n"",2)), name.group=c(""estimable.measure"",""important.measure""))"
+"0","res.MFA.actimp <- MFA(DF.PCA.NA[,c(44:77)], group=c(17,17), type=(rep(""n"",2)), name.group=c(""estimable.measure"",""important.measure""),tab.comp = complete.MFA.active)"

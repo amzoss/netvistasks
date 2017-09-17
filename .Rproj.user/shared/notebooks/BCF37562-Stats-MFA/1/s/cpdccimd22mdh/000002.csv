@@ -1,0 +1,2 @@
+"0","# group all.assignments by mode (i.e., cluster number) and count participants"
+"0","cluster.data <- dplyr::rename(all.assignments, cluster=mode) %>% group_by(cluster) %>% summarise(num.participants=n())"

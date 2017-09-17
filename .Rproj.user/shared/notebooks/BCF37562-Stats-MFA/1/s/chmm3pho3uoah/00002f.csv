@@ -1,0 +1,4 @@
+"0","                       "
+"0","clust.MCA.NA.assign <- clust.MCA.NA$call$X[,6,drop=FALSE]"
+"0","                       "
+"0","names(clust.MCA.NA.assign) <- ""MCA.NA"""

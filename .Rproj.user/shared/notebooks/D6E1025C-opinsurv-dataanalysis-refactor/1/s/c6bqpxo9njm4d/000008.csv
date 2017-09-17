@@ -1,0 +1,3 @@
+"0","ggplot(measures_by_user_clust, aes(x=compiled_answer)) + "
+"0","  geom_bar() +"
+"0","  facet_grid(cluster ~ .)"

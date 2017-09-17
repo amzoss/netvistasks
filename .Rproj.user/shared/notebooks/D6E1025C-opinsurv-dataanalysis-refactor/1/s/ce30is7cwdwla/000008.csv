@@ -1,0 +1,7 @@
+"0","ggplot(measures_by_user_clust) + "
+"0","  geom_mosaic(aes(x=product(compiled_answer, Q11.Demo.HowOftenProduceVis), "
+"0","                  fill=compiled_answer)) +"
+"0","  #facet_grid(cluster~.) +"
+"0","  scale_fill_manual(values=c(""snow4"",""snow3"",""sienna3"",""sienna1"",""skyblue2"",""skyblue4""),"
+"0","                    name="""") +"
+"0","  guides(fill = guide_legend(reverse=T))"

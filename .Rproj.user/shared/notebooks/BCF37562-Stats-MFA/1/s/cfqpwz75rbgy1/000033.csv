@@ -1,0 +1,4 @@
+"0","#dimdesc(res.MCA.imputed)"
+"0","#summary(res.MCA.imputed, nbelements = Inf, file=""summary_MCA_imputed.txt"")"
+"0","#clust.MCA.imputed <- HCPC(res.MCA.imputed)"
+"0","clust.MCA.imputed <- HCPC(res.MCA.imputed, nb.clust=4)"

@@ -1,0 +1,2 @@
+"0","clust.MFA.Skipped.group2.assign <- clust.MFA.Skipped.group2$call$X[,6,drop=FALSE]"
+"0","names(clust.MFA.Skipped.group2.assign) <- ""MFA.Skipped.group2"""

@@ -1,0 +1,8 @@
+"0","# should be able to estimate number of components needed for imputation, but doesn't work"
+"0","#nb <- estim_ncpMCA(DF.PCA.NA[,c(44:77)])"
+"0","#result: Error in tab.disj.comp - vrai.tab : non-conformable arrays"
+"0","complete.MCA <- imputeMCA(DF.PCA.NA[,c(44:77)])"
+"0","#complete.3 <- imputeMCA(DF.PCA.NA[,c(44:77)],ncp=3)"
+"0","#complete.4 <- imputeMCA(DF.PCA.NA,ncp=4)"
+"0","#complete.5 <- imputeMCA(DF.PCA.NA,ncp=5)"
+"0","res.MCA.imputed <- MCA(DF.PCA.NA, tab.disj = complete.MCA$tab.disj, quali.sup=c(1:43,78:93,104:105), quanti.sup=c(94:103))"

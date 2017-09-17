@@ -1,0 +1,2 @@
+"0","clust.MFA.imputed.assign <- clust.MFA.imputed$call$X[,6,drop=FALSE]"
+"0","names(clust.MFA.imputed.assign) <- ""MFA.imputed"""

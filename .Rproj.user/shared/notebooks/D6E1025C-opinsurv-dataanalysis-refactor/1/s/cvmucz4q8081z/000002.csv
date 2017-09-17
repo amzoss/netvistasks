@@ -1,0 +1,6 @@
+"0","# Number of positives on Estimability for NumComponents"
+"0","nrow(measures_by_user_imp[measures_by_user_imp$subgroup == ""Estimable"" & measures_by_user_imp$name == ""NumComponents"" & (measures_by_user_imp$compiled_answer == ""Somewhat high"" | measures_by_user_imp$compiled_answer == ""Very high""),1])"
+"1","[1]"
+"1"," 39"
+"1","
+"

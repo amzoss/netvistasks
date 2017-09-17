@@ -1,0 +1,2 @@
+"0","clust.MCA.imputed.assign <- clust.MCA.imputed$call$X[,6,drop=FALSE]"
+"0","names(clust.MCA.imputed.assign) <- ""MCA.imputed"""

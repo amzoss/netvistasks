@@ -1,0 +1,6 @@
+"0","# Number of positives on Importance for NodeDegree"
+"0","nrow(measures_by_user_imp[measures_by_user_imp$subgroup == ""Important"" & measures_by_user_imp$name == ""NodeDegree"" & (measures_by_user_imp$compiled_answer == ""Somewhat high"" | measures_by_user_imp$compiled_answer == ""Very high""),1])"
+"1","[1]"
+"1"," 46"
+"1","
+"

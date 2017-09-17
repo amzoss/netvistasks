@@ -1,0 +1,2 @@
+"0","clust.MCA.Skipped.assign <- clust.MCA.Skipped$call$X[,6,drop=FALSE]"
+"0","names(clust.MCA.Skipped.assign) <- ""MCA.Skipped"""

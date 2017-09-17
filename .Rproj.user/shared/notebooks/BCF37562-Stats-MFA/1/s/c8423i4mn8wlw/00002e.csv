@@ -1,0 +1,2 @@
+"0","# run MFA on ""Skipped"" data"
+"0","res.MFA.Skipped <- MFA(DF.PCA, group=c(1,1,2,2,1,18,18,17,17,16,10,2), type=c(rep(""n"",10),""s"",""n""), name.group=c(""ac.field"",""high.degree"",""cons.prod"",""res.analysis.vis"",""freq.prod"",""analysis.tools"",""vis.tools"",""estimable.measure"",""important.measure"",""layouts"",""answer.summary"",""grouped_demo""),num.group.sup=c(1:7,10:12))"

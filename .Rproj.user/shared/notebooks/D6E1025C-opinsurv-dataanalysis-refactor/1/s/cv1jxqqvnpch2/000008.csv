@@ -1,0 +1,2 @@
+"0","ggplot(measures_by_user_clust) + "
+"0","  geom_mosaic(aes(x=product(Q11.Demo.HowOftenProduceVis,compiled_answer))) #+"

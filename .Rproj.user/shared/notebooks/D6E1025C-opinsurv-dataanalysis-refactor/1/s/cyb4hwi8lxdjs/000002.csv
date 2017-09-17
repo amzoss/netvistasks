@@ -1,0 +1,5 @@
+"0","measures_rank <- est_vs_imp_completed %>% group_by(name) %>% summarise(imp_pos=sum(Important == ""positive""),est_pos = sum(Estimable == ""positive"")) %>% collect"
+"0","measures_rank$imp_rank <- rank(-measures_rank$imp_pos, ties.method = ""average"")"
+"0","measures_rank$est_rank <- rank(-measures_rank$est_pos, ties.method = ""average"")"
+"0","measures_rank$avg_rank <- rowMeans(measures_rank[,4:5])"
+"0","measure_ranks <- gather(measures_rank[,c(1,4:6)], ""subgroup"", ""rank"", 2:3)"

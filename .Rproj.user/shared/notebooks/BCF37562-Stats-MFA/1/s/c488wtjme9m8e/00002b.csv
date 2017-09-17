@@ -1,0 +1,2 @@
+"0","#clust.MCA.Skipped <- HCPC(res.MCA.Skipped)"
+"0","clust.MCA.Skipped <- HCPC(res.MCA.Skipped, nb.clust=4)"

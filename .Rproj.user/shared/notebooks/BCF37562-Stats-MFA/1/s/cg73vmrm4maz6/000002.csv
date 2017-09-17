@@ -1,0 +1,2 @@
+"0","#aggregate(data_with_clusts[,112], list(data_with_clusts$MFA.NA), mean)"
+"0","#plot(res.MFA.NA, invisible=c(""var"",""quali""), select=""contrib 3"", habillage=7)"

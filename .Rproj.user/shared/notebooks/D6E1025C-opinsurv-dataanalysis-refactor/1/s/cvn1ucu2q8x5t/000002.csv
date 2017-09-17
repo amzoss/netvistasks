@@ -1,0 +1,7 @@
+"0","# generate subset of demographic columns from original dataset "
+"0","# convert demo columns to tall format for some of the joint charts"
+"0","# getting some kind of ""unknown column: text"" warning, but seems to still work okay"
+"0","demo_cols <- dplyr::select(DF_filter, -non_demo_vars) %>% filter(!(V1.Demo.ResponseID %in% omit_users$V1.Demo.ResponseID))"
+"0","demo_cols_subset <- demo_cols[,c(1,5,6,8:12)]"
+"0","demo_cols_tall <- gather(demo_cols_subset,""question"",""answer"",2:8)"
+"0","demo_cols_tall$answer[demo_cols_tall$answer==-99] <- ""Skipped"""

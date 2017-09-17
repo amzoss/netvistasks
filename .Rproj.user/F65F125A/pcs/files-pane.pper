@@ -1,0 +1,13 @@
+{
+    "path" : "~/Box Sync/PhD-AngelaZoss/1-Opinion Survey/data/opinion-survey-public",
+    "sortOrder" : [
+        {
+            "ascending" : false,
+            "columnIndex" : 4
+        },
+        {
+            "ascending" : true,
+            "columnIndex" : 2
+        }
+    ]
+}

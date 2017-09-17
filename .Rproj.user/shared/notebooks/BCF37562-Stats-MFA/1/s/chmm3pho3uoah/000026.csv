@@ -1,0 +1,1 @@
+"0","res.MCA.NA <- MCA(DF.PCA.NA, quali.sup=c(1:43,78:93,104:105),quanti.sup=c(94:103))"

@@ -1,0 +1,2 @@
+"0","#clust.MFA.actimp <- HCPC(res.MFA.actimp)"
+"0","clust.MFA.actimp <- HCPC(res.MFA.actimp, nb.clust=4)"
